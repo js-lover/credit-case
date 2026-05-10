@@ -1,0 +1,81 @@
+## =========================
+## .NET / Build output
+## =========================
+bin/
+obj/
+out/
+build/
+
+*.dll
+*.exe
+*.pdb
+*.cache
+
+## =========================
+## User-specific files
+## =========================
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## =========================
+## Rider / JetBrains
+## =========================
+.idea/
+*.sln.iml
+
+## =========================
+## EF Core
+## =========================
+Migrations/*Designer.cs
+Migrations/*ModelSnapshot.cs
+*.db
+*.db-shm
+*.db-wal
+
+## (Opsiyonel: migration'ları commit etmek istersen bunu KALDIRMA)
+# Migrations/
+
+## =========================
+## Logs
+## =========================
+*.log
+logs/
+
+## =========================
+## Environment files
+## =========================
+.env
+appsettings.Development.json
+appsettings.Production.json
+
+## =========================
+## Docker
+## =========================
+docker-compose.override.yml
+
+## =========================
+## OS files
+## =========================
+.DS_Store
+Thumbs.db
+
+## =========================
+## NuGet
+## =========================
+*.nupkg
+.nuget/
+
+## =========================
+## Test results
+## =========================
+TestResults/
+*.trx
+
+## =========================
+## VS Code extensions
+## =========================
+.history/
