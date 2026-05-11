@@ -3,4 +3,5 @@
   <Project Path="CreditCase.Application/CreditCase.Application.csproj" />
   <Project Path="CreditCase.Domain/CreditCase.Domain.csproj" />
   <Project Path="CreditCase.Infrastructure/CreditCase.Infrastructure.csproj" />
+  <Project Path="CreditCase.Tests/CreditCase.Tests.csproj" />
 </Solution>
