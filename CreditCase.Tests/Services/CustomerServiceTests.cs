@@ -112,7 +112,7 @@ public class CustomerServiceTests
 
         // Assert — iş kuralı ihlali: 422 senaryosu
         await act.Should().ThrowAsync<BusinessRuleException>()
-            .WithMessage("*identity number*");
+            .WithMessage("*TC kimlik*");
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public class CustomerServiceTests
 
         // Assert
         await act.Should().ThrowAsync<BusinessRuleException>()
-            .WithMessage("*email*");
+            .WithMessage("*e-posta*");
     }
 
     // ── UpdateAsync ───────────────────────────────────────────────────────────
@@ -165,7 +165,7 @@ public class CustomerServiceTests
 
         // Assert — email değişti ve çakışıyor → 422
         await act.Should().ThrowAsync<BusinessRuleException>()
-            .WithMessage("*email*");
+            .WithMessage("*e-posta*");
     }
 
     [Fact]

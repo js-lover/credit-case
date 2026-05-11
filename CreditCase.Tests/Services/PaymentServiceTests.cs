@@ -24,6 +24,7 @@ public class PaymentServiceTests
     private readonly Mock<IPaymentRepository> _paymentRepositoryMock;
     private readonly Mock<IInstallmentRepository> _installmentRepositoryMock;
     private readonly Mock<ILoanRepository> _loanRepositoryMock;
+    private readonly Mock<ICustomerRepository> _customerRepositoryMock;
     private readonly Mock<IValidator<CreatePaymentRequest>> _validatorMock;
     private readonly PaymentService _sut;
 
@@ -32,6 +33,7 @@ public class PaymentServiceTests
         _paymentRepositoryMock = new Mock<IPaymentRepository>();
         _installmentRepositoryMock = new Mock<IInstallmentRepository>();
         _loanRepositoryMock = new Mock<ILoanRepository>();
+        _customerRepositoryMock = new Mock<ICustomerRepository>();
         _validatorMock = new Mock<IValidator<CreatePaymentRequest>>();
 
         // Varsayılan: validasyon başarılı
@@ -44,10 +46,19 @@ public class PaymentServiceTests
             .Setup(r => r.GetByInstallmentIdAsync(It.IsAny<int>()))
             .ReturnsAsync((Payment?)null);
 
+        // Varsayılan: müşteri bulundu, güncelleme başarılı
+        _customerRepositoryMock
+            .Setup(r => r.GetByIdAsync(It.IsAny<int>()))
+            .ReturnsAsync(new Customer { Id = 1, CreditScoreBonus = 0 });
+        _customerRepositoryMock
+            .Setup(r => r.UpdateAsync(It.IsAny<Customer>()))
+            .ReturnsAsync((Customer c) => c);
+
         _sut = new PaymentService(
             _paymentRepositoryMock.Object,
             _installmentRepositoryMock.Object,
             _loanRepositoryMock.Object,
+            _customerRepositoryMock.Object,
             _validatorMock.Object);
     }
 
@@ -178,7 +189,7 @@ public class PaymentServiceTests
 
         // Assert — iki kez ödeme yapılamaz
         await act.Should().ThrowAsync<BusinessRuleException>()
-            .WithMessage("*already been paid*");
+            .WithMessage("*zaten ödenmiştir*");
     }
 
     [Fact]
@@ -197,7 +208,7 @@ public class PaymentServiceTests
 
         // Assert — ikinci guard devreye girmeli
         await act.Should().ThrowAsync<BusinessRuleException>()
-            .WithMessage("*already exists*");
+            .WithMessage("*zaten bir ödeme kaydı*");
     }
 
     // ── Yardımcı metodlar ─────────────────────────────────────────────────────
