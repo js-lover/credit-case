@@ -7,7 +7,7 @@ public class CreateLoanRequest
     public int CustomerId { get; set; }
     public LoanType LoanType { get; set; }
     public decimal PrincipalAmount { get; set; }
-    public decimal InterestRate { get; set; }
     public int Term { get; set; }
     public DateTime StartDate { get; set; }
+    public bool IsBalloonPayment { get; set; }
 }

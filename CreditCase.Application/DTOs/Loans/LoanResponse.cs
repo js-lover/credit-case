@@ -14,5 +14,7 @@ public class LoanResponse
     public DateTime StartDate { get; set; }
     public LoanStatus Status { get; set; }
     public decimal RemainingPrincipal { get; set; }
+    /// <summary>Faiz dahil toplam geri ödeme tutarı (tüm taksitlerin toplamı).</summary>
+    public decimal TotalPayableAmount { get; set; }
     public List<InstallmentResponse> Installments { get; set; } = new();
 }

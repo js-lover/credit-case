@@ -17,20 +17,35 @@ namespace CreditCase.Application.Services;
 /// </summary>
 public class LoanService : ILoanService
 {
+    private const int BalloonMinCreditScore = 750;
+    private const decimal MinLoanAmount = 1_000m;
+
     private readonly ILoanRepository _loanRepository;
     private readonly ICustomerRepository _customerRepository;
     private readonly ICreditScoreService _creditScoreService;
+    private readonly IRiskAnalysisService _riskAnalysis;
+    private readonly IInterestCalculationService _interestCalculation;
+    private readonly IMaximumLoanCalculatorService _maxLoanCalculator;
+    private readonly IEnumerable<IInstallmentPlanStrategy> _strategies;
     private readonly IValidator<CreateLoanRequest> _createValidator;
 
     public LoanService(
         ILoanRepository loanRepository,
         ICustomerRepository customerRepository,
         ICreditScoreService creditScoreService,
+        IRiskAnalysisService riskAnalysis,
+        IInterestCalculationService interestCalculation,
+        IMaximumLoanCalculatorService maxLoanCalculator,
+        IEnumerable<IInstallmentPlanStrategy> strategies,
         IValidator<CreateLoanRequest> createValidator)
     {
         _loanRepository = loanRepository;
         _customerRepository = customerRepository;
         _creditScoreService = creditScoreService;
+        _riskAnalysis = riskAnalysis;
+        _interestCalculation = interestCalculation;
+        _maxLoanCalculator = maxLoanCalculator;
+        _strategies = strategies;
         _createValidator = createValidator;
     }
 
@@ -51,7 +66,7 @@ public class LoanService : ILoanService
     {
         var loan = await _loanRepository.GetByIdWithInstallmentsAsync(id);
         if (loan is null)
-            throw new NotFoundException($"Loan with ID {id} not found.");
+            throw new NotFoundException($"{id} numaralı kredi bulunamadı.");
         return MapToResponse(loan);
     }
 
@@ -64,58 +79,71 @@ public class LoanService : ILoanService
     {
         await _createValidator.ValidateAndThrowAsync(request);
 
-        var customer = await _customerRepository.GetByIdAsync(request.CustomerId);
+        // Müşteri borç kapasitesi hesabı için kredileri ve taksitleriyle yüklenir.
+        var customer = await _customerRepository.GetByIdWithLoansAndInstallmentsAsync(request.CustomerId);
         if (customer is null)
-            throw new NotFoundException($"Customer with ID {request.CustomerId} not found.");
+            throw new NotFoundException($"{request.CustomerId} numaralı müşteri bulunamadı.");
 
-        // Üçüncü parti kredi skoru kontrolü: gerçek entegrasyonda yalnızca
-        // MockCreditScoreService değiştirilir, bu kod değişmez.
         var creditScore = await _creditScoreService.GetCreditScoreAsync(request.CustomerId);
-        if (creditScore.Status != "Approved")
-            throw new BusinessRuleException($"Loan application rejected. Credit score status: {creditScore.Status}");
+        if (creditScore.CreditScore < 400)
+            throw new BusinessRuleException($"Kredi başvurusu reddedildi. Kredi skoru {creditScore.CreditScore}, minimum eşiğin altında.");
+
+        // Risk analizi
+        var risk = _riskAnalysis.Analyze(customer, request.PrincipalAmount, request.Term, creditScore.CreditScore);
+        if (risk.Category == RiskCategory.VeryHigh)
+            throw new BusinessRuleException("Kredi başvurusu reddedildi. Müşterinin risk profili çok yüksek.");
+
+        // Maksimum tutar doğrulama
+        var maxLoan = _maxLoanCalculator.Calculate(customer, risk.Category, request.Term);
+        if (request.PrincipalAmount < MinLoanAmount)
+            throw new BusinessRuleException($"Minimum kredi tutarı {MinLoanAmount:N0} TL'dir.");
+        if (maxLoan.MaximumAmount > 0 && request.PrincipalAmount > maxLoan.MaximumAmount)
+            throw new BusinessRuleException($"İstenen tutar, bu müşteri için uygun maksimum tutarı ({maxLoan.MaximumAmount:N2} TL) aşmaktadır.");
+
+        if (request.IsBalloonPayment)
+        {
+            if (request.LoanType != LoanType.Vehicle)
+                throw new BusinessRuleException("Balon ödeme yalnızca Araç kredileri için kullanılabilir.");
+            if (creditScore.CreditScore < BalloonMinCreditScore)
+                throw new BusinessRuleException($"Balon ödeme için en az {BalloonMinCreditScore} kredi skoru gereklidir. Mevcut skor: {creditScore.CreditScore}.");
+        }
+
+        // Faiz oranı banka tarafından hesaplanır; istemci tarafından belirlenemez.
+        decimal interestRate = _interestCalculation.Calculate(risk.Category, request.Term, request.PrincipalAmount, customer);
+
+        var strategy = _strategies.FirstOrDefault(s => s.SupportsBalloon == request.IsBalloonPayment)
+            ?? throw new BusinessRuleException("İstenen ödeme türü için uygun bir taksit planı stratejisi bulunamadı.");
 
         var loan = new Loan
         {
             CustomerId = request.CustomerId,
             LoanType = request.LoanType,
             PrincipalAmount = request.PrincipalAmount,
-            InterestRate = request.InterestRate,
+            InterestRate = interestRate,
             Term = request.Term,
             StartDate = request.StartDate,
             Status = LoanStatus.Active,
-            // Başlangıçta kalan anapara = anapara (henüz ödeme yapılmadı).
             RemainingPrincipal = request.PrincipalAmount,
-            Installments = GenerateInstallments(request)
+            Installments = strategy.Generate(request.PrincipalAmount, interestRate, request.Term, request.StartDate)
         };
 
         var created = await _loanRepository.AddAsync(loan);
         return MapToResponse(created);
     }
 
-    /// <summary>
-    /// Düz faiz (flat-rate) yöntemiyle taksit planı üretir.
-    /// <para>
-    /// Formül: totalAmount = anapara × (1 + yıllık_faiz/100 × vade_yıl)<br/>
-    /// monthlyAmount = ROUND(totalAmount / vade_ay, 2)
-    /// </para>
-    /// Bu modelde faiz vade boyunca değişmez; her taksit eşit tutardadır.
-    /// </summary>
-    private static List<Installment> GenerateInstallments(CreateLoanRequest request)
+    // Amortizasyon toplam ödemesi: aylık taksit × vade.
+    // Taksitler yüklüyse doğrudan topla (balon ödeme için de doğru);
+    // yüklü değilse amortizasyon formülüyle yaklaşık hesapla.
+    private static decimal ComputeTotalPayable(Loan loan)
     {
-        decimal termYears = request.Term / 12m;
-        decimal totalAmount = request.PrincipalAmount * (1 + request.InterestRate / 100 * termYears);
-        decimal monthlyAmount = Math.Round(totalAmount / request.Term, 2);
+        if (loan.Installments.Any())
+            return loan.Installments.Sum(i => i.Amount);
 
-        return Enumerable.Range(1, request.Term)
-            .Select(i => new Installment
-            {
-                InstallmentNumber = i,
-                Amount = monthlyAmount,
-                // Vade tarihi: kredi başlangıcından i ay sonrası.
-                DueDate = request.StartDate.AddMonths(i),
-                Status = InstallmentStatus.Unpaid
-            })
-            .ToList();
+        decimal r = loan.InterestRate / 100 / 12;
+        if (r == 0 || loan.Term <= 0) return loan.PrincipalAmount;
+        double factor = Math.Pow(1 + (double)r, loan.Term);
+        decimal monthly = loan.PrincipalAmount * ((decimal)r * (decimal)factor / ((decimal)factor - 1));
+        return Math.Round(monthly * loan.Term, 2);
     }
 
     private static LoanResponse MapToResponse(Loan loan) => new()
@@ -129,6 +157,7 @@ public class LoanService : ILoanService
         StartDate = loan.StartDate,
         Status = loan.Status,
         RemainingPrincipal = loan.RemainingPrincipal,
+        TotalPayableAmount = ComputeTotalPayable(loan),
         Installments = loan.Installments.Select(i => new InstallmentResponse
         {
             Id = i.Id,
@@ -137,6 +166,7 @@ public class LoanService : ILoanService
             Amount = i.Amount,
             DueDate = i.DueDate,
             Status = i.Status,
+            IsBalloon = i.IsBalloon,
             Payment = i.Payment is null ? null : new PaymentResponse
             {
                 Id = i.Payment.Id,
