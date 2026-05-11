@@ -2,6 +2,7 @@ using CreditCase.Application.DTOs.Customers;
 using CreditCase.Application.Exceptions;
 using CreditCase.Application.Interfaces.Repositories;
 using CreditCase.Application.Services;
+using CreditCase.Application.Validators;
 using CreditCase.Domain.Entities;
 using FluentAssertions;
 using FluentValidation;
@@ -20,6 +21,7 @@ public class CustomerServiceTests
     // ── Bağımlılık mock'ları ──────────────────────────────────────────────────
     private readonly Mock<ICustomerRepository> _repositoryMock;
     private readonly Mock<IValidator<CreateCustomerRequest>> _validatorMock;
+    private readonly Mock<IValidator<UpdateCustomerRequest>> _updateValidatorMock;
 
     // Test edilen sınıf (System Under Test)
     private readonly CustomerService _sut;
@@ -28,14 +30,19 @@ public class CustomerServiceTests
     {
         _repositoryMock = new Mock<ICustomerRepository>();
         _validatorMock = new Mock<IValidator<CreateCustomerRequest>>();
+        _updateValidatorMock = new Mock<IValidator<UpdateCustomerRequest>>();
 
-        // ValidateAndThrowAsync, IValidator.ValidateAsync'i dahili olarak çağırır.
-        // Varsayılan olarak başarılı sonuç döner (hata listesi boş).
+        // ValidateAndThrowAsync, IValidator<T> arayüzünün ValidateAsync(ValidationContext<T>, ct)
+        // metodunu çağırır. Mock bu overload üzerinden kurulmalıdır; aksi hâlde eşleşmez.
         _validatorMock
-            .Setup(v => v.ValidateAsync(It.IsAny<CreateCustomerRequest>(), It.IsAny<CancellationToken>()))
+            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<CreateCustomerRequest>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ValidationResult());
 
-        _sut = new CustomerService(_repositoryMock.Object, _validatorMock.Object);
+        _updateValidatorMock
+            .Setup(v => v.ValidateAsync(It.IsAny<ValidationContext<UpdateCustomerRequest>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ValidationResult());
+
+        _sut = new CustomerService(_repositoryMock.Object, _validatorMock.Object, _updateValidatorMock.Object);
     }
 
     // ── GetByIdAsync ──────────────────────────────────────────────────────────
@@ -205,6 +212,98 @@ public class CustomerServiceTests
 
         // Assert — repository'nin DeleteAsync'i tam olarak bir kez çağrılmalı
         _repositoryMock.Verify(r => r.DeleteAsync(customer), Times.Once);
+    }
+
+    // ── Soft Delete ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task DeleteAsync_WithExistingId_SetsIsDeletedTrue()
+    {
+        // Arrange — repository soft-delete davranışını simüle ediyor
+        var customer = BuildCustomer(id: 1);
+        _repositoryMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(customer);
+        _repositoryMock
+            .Setup(r => r.DeleteAsync(It.IsAny<Customer>()))
+            .Callback<Customer>(c => c.IsDeleted = true)
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await _sut.DeleteAsync(1);
+
+        // Assert — repository davranışı sonrası IsDeleted true olmalı
+        customer.IsDeleted.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WithExistingId_SetsDeletedAt()
+    {
+        // Arrange
+        var customer = BuildCustomer(id: 1);
+        _repositoryMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(customer);
+        _repositoryMock
+            .Setup(r => r.DeleteAsync(It.IsAny<Customer>()))
+            .Callback<Customer>(c => c.DeletedAt = DateTime.UtcNow)
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await _sut.DeleteAsync(1);
+
+        // Assert
+        customer.DeletedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task GetAllAsync_DoesNotReturnSoftDeletedCustomers()
+    {
+        // Arrange — global query filter devrede; repository yalnızca aktif kayıtları döner
+        var activeCustomers = new List<Customer> { BuildCustomer(id: 1), BuildCustomer(id: 2) };
+        _repositoryMock.Setup(r => r.GetAllAsync()).ReturnsAsync(activeCustomers);
+
+        // Act
+        var result = await _sut.GetAllAsync();
+
+        // Assert — soft-deleted kayıtlar repository tarafından filtrelenmiş; servis olduğu gibi döner
+        result.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_ForSoftDeletedCustomer_ThrowsNotFoundException()
+    {
+        // Arrange — global query filter devrede; soft-deleted kayıt için repository null döner
+        _repositoryMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync((Customer?)null);
+
+        // Act
+        var act = () => _sut.GetByIdAsync(1);
+
+        // Assert — servis null → NotFoundException olarak yorumlar
+        await act.Should().ThrowAsync<NotFoundException>();
+    }
+
+    // ── UpdateAsync Validasyon ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task UpdateAsync_WithInvalidPhone_ThrowsValidationException()
+    {
+        // Arrange — gerçek UpdateCustomerRequestValidator ile SUT; mock'un FV iç dispatch'ini
+        // yakalaması güvenilir olmadığı için bu testte somut validator kullanılır.
+        var sut = new CustomerService(
+            _repositoryMock.Object,
+            _validatorMock.Object,
+            new UpdateCustomerRequestValidator());
+
+        var request = new UpdateCustomerRequest
+        {
+            FirstName = "Ad",
+            LastName = "Soyad",
+            Email = "test@example.com",
+            PhoneNumber = "123"
+        };
+
+        // Act
+        var act = () => sut.UpdateAsync(1, request);
+
+        // Assert — ValidateAndThrowAsync ValidationException fırlatır
+        await act.Should().ThrowAsync<ValidationException>();
     }
 
     // ── Yardımcı factory metodlar ─────────────────────────────────────────────

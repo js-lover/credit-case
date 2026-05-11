@@ -1,6 +1,6 @@
 # Digital Loan & Repayment Management System
 
-Bireysel müşterilerin kredi başvurularını, kredi bakiyelerini ve geri ödeme planlarını yönetebildiği dijital bankacılık backend uygulaması.
+Bireysel müşterilerin kredi başvurularını, kredi bakiyelerini ve geri ödeme planlarını yönetebildiği full-stack dijital bankacılık uygulaması.
 
 ---
 
@@ -25,6 +25,8 @@ Bireysel müşterilerin kredi başvurularını, kredi bakiyelerini ve geri ödem
 
 ## Teknoloji Stack'i
 
+### Backend
+
 | Katman | Teknoloji |
 |---|---|
 | Framework | .NET 10 / ASP.NET Core Web API |
@@ -34,7 +36,20 @@ Bireysel müşterilerin kredi başvurularını, kredi bakiyelerini ve geri ödem
 | Validasyon | FluentValidation 11 |
 | API Dokümantasyonu | Swagger / OpenAPI (Swashbuckle) |
 | Container | Docker |
+| Test | xUnit · Moq · FluentAssertions |
 | Versiyon Kontrolü | Git — Conventional Commits |
+
+### Frontend
+
+| Katman | Teknoloji |
+|---|---|
+| Framework | React 18 |
+| Dil | TypeScript (`erasableSyntaxOnly`) |
+| Build | Vite |
+| CSS | Tailwind CSS v4 (`@tailwindcss/vite`) |
+| Routing | React Router v6 |
+| HTTP | Axios + global interceptor |
+| Toast | react-hot-toast |
 
 ---
 
@@ -82,7 +97,7 @@ CreditCase.sln
 │
 ├── CreditCase.Domain/
 │   ├── Entities/
-│   │   ├── Customer.cs
+│   │   ├── Customer.cs          # IsDeleted / DeletedAt (soft delete)
 │   │   ├── Loan.cs
 │   │   ├── Installment.cs
 │   │   └── Payment.cs
@@ -109,6 +124,7 @@ CreditCase.sln
 │   │   └── PaymentService.cs
 │   ├── Validators/
 │   │   ├── CreateCustomerRequestValidator.cs
+│   │   ├── UpdateCustomerRequestValidator.cs
 │   │   ├── CreateLoanRequestValidator.cs
 │   │   └── CreatePaymentRequestValidator.cs
 │   ├── Exceptions/
@@ -118,7 +134,7 @@ CreditCase.sln
 │
 ├── CreditCase.Infrastructure/
 │   ├── Persistence/
-│   │   ├── AppDbContext.cs
+│   │   ├── AppDbContext.cs      # Global query filter (soft delete), filtered unique indexes
 │   │   └── Repositories/
 │   │       ├── CustomerRepository.cs
 │   │       ├── LoanRepository.cs
@@ -127,18 +143,36 @@ CreditCase.sln
 │   ├── Services/
 │   │   └── MockCreditScoreService.cs
 │   ├── Migrations/
-│   │   └── 20260511000000_InitialCreate.cs
+│   │   ├── 20260511000000_InitialCreate.cs
+│   │   └── 20260511000002_AddSoftDeleteToCustomer.cs
 │   └── DependencyInjection.cs
 │
-└── CreditCase.Api/
-    ├── Controllers/
-    │   ├── CustomersController.cs
-    │   ├── LoansController.cs
-    │   ├── InstallmentsController.cs
-    │   └── PaymentsController.cs
-    ├── Middleware/
-    │   └── ExceptionHandlingMiddleware.cs
-    └── Program.cs
+├── CreditCase.Api/
+│   ├── Controllers/
+│   │   ├── CustomersController.cs
+│   │   ├── LoansController.cs
+│   │   ├── InstallmentsController.cs
+│   │   └── PaymentsController.cs
+│   ├── Middleware/
+│   │   └── ExceptionHandlingMiddleware.cs
+│   └── Program.cs
+│
+├── CreditCase.Tests/
+│   ├── Services/
+│   │   ├── CustomerServiceTests.cs   # 46 test (soft delete dahil)
+│   │   ├── LoanServiceTests.cs
+│   │   ├── InstallmentServiceTests.cs
+│   │   └── PaymentServiceTests.cs
+│   └── Validators/
+│       └── CustomerValidatorTests.cs # TC kimlik no ve telefon validasyon testleri
+│
+└── CreditCase.UI/                    # React frontend (bkz. CreditCase.UI/README.md)
+    ├── src/
+    │   ├── pages/     (Dashboard, Customers, Loans, Payments, ...)
+    │   ├── services/  (Axios API katmanı)
+    │   ├── components/(UI bileşenleri + layout)
+    │   └── types/     (API DTO interface'leri)
+    └── README.md
 ```
 
 ---
@@ -154,10 +188,12 @@ Bankanın bireysel müşterisini temsil eder.
 | Id | int | Birincil anahtar |
 | FirstName | string (100) | Ad |
 | LastName | string (100) | Soyad |
-| IdentityNumber | string (11) | TC Kimlik No — benzersiz |
-| Email | string (200) | E-posta |
-| PhoneNumber | string (20) | Telefon |
+| IdentityNumber | string (11) | TC Kimlik No — aktif kayıtlar arasında benzersiz |
+| Email | string (200) | E-posta — aktif kayıtlar arasında benzersiz |
+| PhoneNumber | string (20) | Telefon (10–11 hane, yalnızca rakam) |
 | CreatedAt | DateTime | Kayıt tarihi |
+| IsDeleted | bool | Soft delete bayrağı (varsayılan: false) |
+| DeletedAt | DateTime? | Silinme tarihi (null = aktif kayıt) |
 
 ### Loan
 
@@ -298,8 +334,10 @@ erDiagram
 ## İş Kuralları
 
 ### Müşteri Yönetimi
-- TC Kimlik Numarası sistemde benzersiz olmalıdır.
-- Bir müşteri silindiğinde bağlı tüm krediler ve taksitler cascade olarak silinir.
+- TC Kimlik Numarası ve e-posta **aktif kayıtlar** arasında benzersiz olmalıdır.
+- Silme işlemi **soft delete** ile yapılır: kayıt fiziksel olarak silinmez, `IsDeleted = true` ve `DeletedAt` set edilir. Kredi ve ödeme geçmişi korunur.
+- EF Core global query filter (`HasQueryFilter`) sayesinde soft-deleted kayıtlar tüm sorgularda otomatik olarak hariç tutulur.
+- TC ve e-posta benzersizlik kontrolleri yalnızca `IsDeleted = 0` satırlarına uygulanır (filtered unique index). Bu sayede silinmiş bir müşterinin TC'si veya e-postası yeni bir kayıt için kullanılabilir.
 
 ### Kredi Oluşturma
 - Kredi oluşturulmadan önce mock `CreditScoreService`'e danışılır. Sonuç `Approved` değilse kredi reddedilir.
@@ -344,12 +382,13 @@ totalAmount    = 12.000 × (1 + 0,12 × 1) = 13.440 ₺
 monthlyAmount  = 13.440 / 12 = 1.120 ₺/ay
 ```
 
-Bu modelde faiz vade boyunca sabit tutulur ve her taksit eşit miktardadır. Kalan ana para (RemainingPrincipal), her başarılı ödemede şu formülle güncellenir:
+Bu modelde faiz vade boyunca sabit tutulur ve her taksit eşit miktardadır. Kalan yükümlülük (RemainingPrincipal), her başarılı ödemede ödenmemiş taksit tutarlarının toplamıyla güncellenir:
 
 ```
-principalPerInstallment = ROUND(PrincipalAmount / Term, 2)
-RemainingPrincipal      = principalPerInstallment × (kalan ödenmemiş taksit sayısı)
+RemainingPrincipal = SUM(ödenmemiş taksitlerin Amount değerleri)
 ```
+
+Bu yaklaşım, faiz dahil gerçek kalan ödeme yükümlülüğünü yansıtır. Eski formül (`anapara / vade × kalan taksit sayısı`) yalnızca anapara bileşenini hesapladığı için kullanıcıya yanlış bakiye gösteriyordu.
 
 ---
 
@@ -480,6 +519,7 @@ Kredi başvurusunda `ICreditScoreService` arayüzü üzerinden kredi skoru sorgu
 
 - .NET 10 SDK
 - Docker
+- Node.js ≥ 20
 
 ### 1. SQL Server'ı başlat
 
@@ -499,14 +539,31 @@ dotnet ef database update \
   --startup-project CreditCase.Api
 ```
 
-### 3. Uygulamayı çalıştır
+### 3. Backend'i başlat
 
 ```bash
 dotnet run --project CreditCase.Api
 ```
 
-Uygulama varsayılan olarak `http://localhost:5285` adresinde başlar.  
-Swagger arayüzüne `http://localhost:5285/swagger` üzerinden erişilebilir.
+Backend varsayılan olarak `http://localhost:5285` adresinde çalışır.  
+Swagger arayüzü: `http://localhost:5285/swagger`
+
+### 4. Frontend'i başlat
+
+```bash
+cd CreditCase.UI
+npm install
+cp .env.example .env   # VITE_API_URL değerini backend portuna göre düzenle
+npm run dev
+```
+
+Frontend `http://localhost:5173` adresinde çalışır. Ayrıntılı kurulum için bkz. [`CreditCase.UI/README.md`](./CreditCase.UI/README.md).
+
+### Birim testleri
+
+```bash
+dotnet test CreditCase.Tests
+```
 
 ### Bağlantı Dizesi
 
