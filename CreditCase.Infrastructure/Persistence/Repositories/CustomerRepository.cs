@@ -22,6 +22,12 @@ public class CustomerRepository : ICustomerRepository
     public async Task<Customer?> GetByIdentityNumberAsync(string identityNumber)
         => await _context.Customers.FirstOrDefaultAsync(c => c.IdentityNumber == identityNumber);
 
+    public async Task<Customer?> GetByIdWithLoansAndInstallmentsAsync(int id)
+        => await _context.Customers
+            .Include(c => c.Loans)
+                .ThenInclude(l => l.Installments)
+            .FirstOrDefaultAsync(c => c.Id == id);
+
     public async Task<Customer> AddAsync(Customer customer)
     {
         _context.Customers.Add(customer);

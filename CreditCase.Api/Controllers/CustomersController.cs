@@ -15,6 +15,9 @@ public class CustomersController : ControllerBase
         _customerService = customerService;
     }
 
+    /// <summary>
+    /// Sistemdeki tüm müşterileri listeler.
+    /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
@@ -22,6 +25,10 @@ public class CustomersController : ControllerBase
         return Ok(customers);
     }
 
+    /// <summary>
+    /// Belirtilen ID'ye sahip müşteriyi döner.
+    /// </summary>
+    /// <param name="id">Müşteri ID'si</param>
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
@@ -29,6 +36,21 @@ public class CustomersController : ControllerBase
         return Ok(customer);
     }
 
+    /// <summary>
+    /// Müşterinin borç özetini döner: toplam kalan anapara, gecikmiş/ödenen/bekleyen
+    /// taksit sayıları ve toplam ödenmemiş borç tutarı.
+    /// </summary>
+    /// <param name="id">Müşteri ID'si</param>
+    [HttpGet("{id:int}/summary")]
+    public async Task<IActionResult> GetSummary(int id)
+    {
+        var summary = await _customerService.GetSummaryAsync(id);
+        return Ok(summary);
+    }
+
+    /// <summary>
+    /// Yeni müşteri kaydı oluşturur. TC Kimlik Numarası benzersiz olmalıdır.
+    /// </summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateCustomerRequest request)
     {
@@ -36,6 +58,11 @@ public class CustomersController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = customer.Id }, customer);
     }
 
+    /// <summary>
+    /// Müşterinin ad, soyad, e-posta ve telefon bilgilerini günceller.
+    /// </summary>
+    /// <param name="id">Müşteri ID'si</param>
+    /// <param name="request">Güncellenecek alanlar</param>
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateCustomerRequest request)
     {
@@ -43,6 +70,10 @@ public class CustomersController : ControllerBase
         return Ok(customer);
     }
 
+    /// <summary>
+    /// Müşteriyi siler. Bağlı kredi ve taksit kayıtları cascade olarak kaldırılır.
+    /// </summary>
+    /// <param name="id">Müşteri ID'si</param>
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
