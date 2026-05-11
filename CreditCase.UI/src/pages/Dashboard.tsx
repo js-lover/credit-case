@@ -98,7 +98,7 @@ export function Dashboard() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[#E2E8F0] text-left text-[#64748B]">
-              {['#', 'Ana Para', 'Kalan', 'Durum', ''].map(h => (
+              {['#', 'Ana Para', 'Toplam Ödenecek', 'Kalan', 'Durum', ''].map(h => (
                 <th key={h} className="px-4 py-3 font-medium">{h}</th>
               ))}
             </tr>
@@ -108,7 +108,8 @@ export function Dashboard() {
               <tr key={l.id} className="border-b border-[#E2E8F0] last:border-0 hover:bg-[#F8FAFC]">
                 <td className="px-4 py-3 text-[#64748B]">#{l.id}</td>
                 <td className="px-4 py-3 font-medium">{formatCurrency(l.principalAmount)}</td>
-                <td className="px-4 py-3 font-medium text-[#1B4FD8]">{formatCurrency(l.remainingPrincipal)}</td>
+                <td className="px-4 py-3 font-semibold text-[#1B4FD8]">{formatCurrency(l.totalPayableAmount)}</td>
+                <td className="px-4 py-3 font-medium text-[#64748B]">{formatCurrency(l.remainingPrincipal)}</td>
                 <td className="px-4 py-3"><LoanStatusBadge status={l.status} /></td>
                 <td className="px-4 py-3">
                   <Button size="sm" variant="ghost" onClick={() => navigate(`/loans/${l.id}`)}>
@@ -119,7 +120,7 @@ export function Dashboard() {
             ))}
             {loans.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-[#64748B]">Henüz kredi yok.</td>
+                <td colSpan={6} className="px-4 py-8 text-center text-[#64748B]">Henüz kredi yok.</td>
               </tr>
             )}
           </tbody>

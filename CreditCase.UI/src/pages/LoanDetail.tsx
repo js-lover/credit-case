@@ -56,6 +56,15 @@ export function LoanDetail() {
 
   const paidCount    = loan.installments.filter(i => i.status === InstallmentStatus.Paid).length;
   const overdueCount = loan.installments.filter(i => i.status === InstallmentStatus.Overdue).length;
+  const paidTotal    = loan.installments
+    .filter(i => i.status === InstallmentStatus.Paid)
+    .reduce((s, i) => s + (i.payment?.paymentAmount ?? i.amount), 0);
+
+  // Sıralı ödeme: en düşük numaralı ödenmemiş taksit.
+  const unpaidInstallments = loan.installments
+    .filter(i => i.status !== InstallmentStatus.Paid)
+    .sort((a, b) => a.installmentNumber - b.installmentNumber);
+  const nextPayableId = unpaidInstallments[0]?.id ?? null;
 
   return (
     <PageLayout
@@ -65,9 +74,19 @@ export function LoanDetail() {
       {/* Kredi özet kartları */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="Ana Para" value={formatCurrency(loan.principalAmount)} />
-        <StatCard label="Kalan Anapara" value={formatCurrency(loan.remainingPrincipal)} accent="default" />
-        <StatCard label="Ödenen / Toplam" value={`${paidCount} / ${loan.term}`} sub={`${overdueCount} gecikmiş`} accent={overdueCount > 0 ? 'danger' : 'success'} />
-        <StatCard label="Durum" value={loan.status === 0 ? 'Aktif' : 'Kapalı'} />
+        <StatCard
+          label="Toplam Ödenecek"
+          value={formatCurrency(loan.totalPayableAmount)}
+          sub={`Faiz: ${formatCurrency(loan.totalPayableAmount - loan.principalAmount)}`}
+          accent="warning"
+        />
+        <StatCard
+          label="Ödenen / Kalan"
+          value={`${formatCurrency(paidTotal)} / ${formatCurrency(loan.remainingPrincipal)}`}
+          sub={`${paidCount} / ${loan.term} taksit`}
+          accent={overdueCount > 0 ? 'danger' : 'success'}
+        />
+        <StatCard label="Durum" value={loan.status === 0 ? 'Aktif' : 'Kapalı'} sub={overdueCount > 0 ? `${overdueCount} gecikmiş` : undefined} />
       </div>
 
       {/* Taksit planı */}
@@ -86,9 +105,14 @@ export function LoanDetail() {
           </thead>
           <tbody>
             {loan.installments.map(inst => (
-              <tr key={inst.id} className="border-b border-[#E2E8F0] last:border-0 hover:bg-[#F8FAFC]">
-                <td className="px-4 py-3 text-[#64748B]">{inst.installmentNumber}</td>
-                <td className="px-4 py-3 font-medium">{formatCurrency(inst.amount)}</td>
+              <tr key={inst.id} className={`border-b border-[#E2E8F0] last:border-0 hover:bg-[#F8FAFC] ${inst.isBalloon ? 'bg-amber-50' : ''}`}>
+                <td className="px-4 py-3 text-[#64748B]">
+                  {inst.installmentNumber}
+                  {inst.isBalloon && (
+                    <span className="ml-1 px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 rounded">BALON</span>
+                  )}
+                </td>
+                <td className={`px-4 py-3 font-medium ${inst.isBalloon ? 'text-amber-700' : ''}`}>{formatCurrency(inst.amount)}</td>
                 <td className={`px-4 py-3 ${inst.status === InstallmentStatus.Overdue ? 'text-red-600 font-medium' : 'text-[#64748B]'}`}>
                   {formatDate(inst.dueDate)}
                 </td>
@@ -99,9 +123,11 @@ export function LoanDetail() {
                   <InstallmentBadge status={inst.status} />
                 </td>
                 <td className="px-4 py-3 text-right">
-                  {inst.status !== InstallmentStatus.Paid && (
+                  {inst.id === nextPayableId ? (
                     <Button size="sm" onClick={() => openPayModal(inst)}>Öde</Button>
-                  )}
+                  ) : inst.status !== InstallmentStatus.Paid ? (
+                    <span className="text-xs text-[#64748B]">Önceki bekliyor</span>
+                  ) : null}
                 </td>
               </tr>
             ))}

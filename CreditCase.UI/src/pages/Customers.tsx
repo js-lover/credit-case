@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { customerService } from '../services/api/customerService';
 import type { CustomerResponse, CreateCustomerRequest, UpdateCustomerRequest } from '../types';
+import {
+  ProfessionCategory, EmploymentStatus,
+  PROFESSION_LABELS, EMPLOYMENT_STATUS_LABELS,
+} from '../types';
 import { PageLayout } from '../components/layout/PageLayout';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -27,23 +31,36 @@ function CustomerForm({ initial, isEdit, onSubmit, onClose, loading }: CustomerF
     identityNumber: initial?.identityNumber ?? '',
     email: initial?.email ?? '',
     phoneNumber: initial?.phoneNumber ?? '',
+    dateOfBirth: initial?.dateOfBirth ? initial.dateOfBirth.split('T')[0] : '',
+    monthlyIncome: initial?.monthlyIncome ?? 0,
+    professionCategory: initial?.professionCategory ?? ProfessionCategory.Other,
+    employmentStatus: initial?.employmentStatus ?? EmploymentStatus.Active,
   });
 
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(prev => ({ ...prev, [field]: e.target.value }));
 
-  // Sadece rakam kabul eden handler (TC ve telefon için)
   const setDigits = (field: string, maxLen: number) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const digits = e.target.value.replace(/\D/g, '').slice(0, maxLen);
     setForm(prev => ({ ...prev, [field]: digits }));
   };
 
+  const setSelect = (field: string) => (e: React.ChangeEvent<HTMLSelectElement>) =>
+    setForm(prev => ({ ...prev, [field]: Number(e.target.value) }));
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onSubmit(isEdit
-      ? { firstName: form.firstName, lastName: form.lastName, email: form.email, phoneNumber: form.phoneNumber }
-      : form
-    );
+    const common = {
+      firstName: form.firstName,
+      lastName: form.lastName,
+      email: form.email,
+      phoneNumber: form.phoneNumber,
+      dateOfBirth: form.dateOfBirth,
+      monthlyIncome: Number(form.monthlyIncome),
+      professionCategory: form.professionCategory,
+      employmentStatus: form.employmentStatus,
+    };
+    await onSubmit(isEdit ? common : { ...common, identityNumber: form.identityNumber });
   };
 
   return (
@@ -79,6 +96,30 @@ function CustomerForm({ initial, isEdit, onSubmit, onClose, loading }: CustomerF
         placeholder="5xxxxxxxxx"
         required
       />
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Doğum Tarihi" type="date" value={form.dateOfBirth} onChange={set('dateOfBirth')} required />
+        <Field
+          label="Aylık Gelir (₺)"
+          type="number"
+          min={0}
+          step={0.01}
+          value={form.monthlyIncome}
+          onChange={set('monthlyIncome')}
+          required
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <SelectField label="Meslek" value={form.professionCategory} onChange={setSelect('professionCategory')}>
+          {Object.entries(PROFESSION_LABELS).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </SelectField>
+        <SelectField label="İstihdam Durumu" value={form.employmentStatus} onChange={setSelect('employmentStatus')}>
+          {Object.entries(EMPLOYMENT_STATUS_LABELS).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </SelectField>
+      </div>
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onClose}>İptal</Button>
         <Button type="submit" loading={loading}>{isEdit ? 'Güncelle' : 'Oluştur'}</Button>
@@ -92,6 +133,17 @@ function Field({ label, ...props }: { label: string } & React.InputHTMLAttribute
     <div>
       <label className="block text-sm font-medium text-[#0F172A] mb-1">{label}</label>
       <input {...props} className="w-full border border-[#E2E8F0] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B4FD8]/30" />
+    </div>
+  );
+}
+
+function SelectField({ label, children, ...props }: { label: string; children: React.ReactNode } & React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-[#0F172A] mb-1">{label}</label>
+      <select {...props} className="w-full border border-[#E2E8F0] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B4FD8]/30">
+        {children}
+      </select>
     </div>
   );
 }
