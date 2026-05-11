@@ -14,6 +14,7 @@ public class AppDbContext : DbContext
     public DbSet<Loan> Loans { get; set; }
     public DbSet<Installment> Installments { get; set; }
     public DbSet<Payment> Payments { get; set; }
+    public DbSet<LoanEvaluationResult> LoanEvaluations { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -28,6 +29,11 @@ public class AppDbContext : DbContext
             entity.Property(e => e.Email).IsRequired().HasMaxLength(200);
             entity.Property(e => e.PhoneNumber).HasMaxLength(20);
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+            entity.Property(e => e.CreditScoreBonus).HasDefaultValue(0);
+            // Kredi değerlendirme profil alanları.
+            entity.Property(e => e.MonthlyIncome).HasPrecision(18, 2);
+            entity.Property(e => e.ProfessionCategory).HasConversion<string>();
+            entity.Property(e => e.EmploymentStatus).HasConversion<string>();
 
             // Filtered unique indexes: soft-deleted kayıtlar (IsDeleted=1) benzersizlik
             // kısıtının dışında tutulur. Bu sayede aynı TC veya e-posta ile yeni kayıt
@@ -76,6 +82,24 @@ public class AppDbContext : DbContext
             entity.HasOne(e => e.Installment)
                 .WithOne(i => i.Payment)
                 .HasForeignKey<Payment>(e => e.InstallmentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<LoanEvaluationResult>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.RequestedAmount).HasPrecision(18, 2);
+            entity.Property(e => e.ApprovedAmount).HasPrecision(18, 2);
+            entity.Property(e => e.MaximumAmount).HasPrecision(18, 2);
+            entity.Property(e => e.ApprovedInterestRate).HasPrecision(5, 2);
+            entity.Property(e => e.DebtToIncomeRatio).HasPrecision(5, 4);
+            entity.Property(e => e.MonthlyInstallmentEstimate).HasPrecision(18, 2);
+            entity.Property(e => e.RiskLevel).HasConversion<string>();
+            entity.Property(e => e.RequestedLoanType).HasConversion<string>();
+            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+            entity.HasOne(e => e.Customer)
+                .WithMany(c => c.LoanEvaluations)
+                .HasForeignKey(e => e.CustomerId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

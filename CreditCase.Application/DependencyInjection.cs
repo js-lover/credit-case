@@ -13,6 +13,7 @@ public static class DependencyInjection
         services.AddScoped<ILoanService, LoanService>();
         services.AddScoped<IInstallmentService, InstallmentService>();
         services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<ILoanEvaluationService, LoanEvaluationService>();
 
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
 

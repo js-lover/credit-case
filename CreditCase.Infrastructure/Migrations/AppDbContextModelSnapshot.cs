@@ -30,12 +30,17 @@ namespace CreditCase.Infrastructure.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
                     b.Property<DateTime>("CreatedAt").HasColumnType("datetime2");
                     b.Property<DateTime?>("DeletedAt").HasColumnType("datetime2");
+                    b.Property<DateTime>("DateOfBirth").HasColumnType("datetime2");
                     b.Property<string>("Email").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
+                    b.Property<string>("EmploymentStatus").IsRequired().HasColumnType("nvarchar(max)");
                     b.Property<string>("FirstName").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
                     b.Property<string>("IdentityNumber").IsRequired().HasMaxLength(11).HasColumnType("nvarchar(11)");
+                    b.Property<int>("CreditScoreBonus").HasDefaultValue(0).HasColumnType("int");
                     b.Property<bool>("IsDeleted").HasDefaultValue(false).HasColumnType("bit");
                     b.Property<string>("LastName").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
+                    b.Property<decimal>("MonthlyIncome").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
                     b.Property<string>("PhoneNumber").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
+                    b.Property<string>("ProfessionCategory").IsRequired().HasColumnType("nvarchar(max)");
                     b.HasKey("Id");
                     b.HasIndex("Email").IsUnique().HasFilter("[IsDeleted] = 0");
                     b.HasIndex("IdentityNumber").IsUnique().HasFilter("[IsDeleted] = 0");
@@ -51,6 +56,7 @@ namespace CreditCase.Infrastructure.Migrations
                     b.Property<decimal>("Amount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
                     b.Property<DateTime>("DueDate").HasColumnType("datetime2");
                     b.Property<int>("InstallmentNumber").HasColumnType("int");
+                    b.Property<bool>("IsBalloon").HasDefaultValue(false).HasColumnType("bit");
                     b.Property<int>("LoanId").HasColumnType("int");
                     b.Property<string>("Status").IsRequired().HasColumnType("nvarchar(max)");
                     b.HasKey("Id");
@@ -75,6 +81,35 @@ namespace CreditCase.Infrastructure.Migrations
                     b.HasKey("Id");
                     b.HasIndex("CustomerId");
                     b.ToTable("Loans");
+                });
+
+            modelBuilder.Entity("CreditCase.Domain.Entities.LoanEvaluationResult", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                    b.Property<decimal>("ApprovedAmount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<decimal>("ApprovedInterestRate").HasPrecision(5, 2).HasColumnType("decimal(5,2)");
+                    b.Property<int>("CreditScore").HasColumnType("int");
+                    b.Property<int>("CustomerId").HasColumnType("int");
+                    b.Property<DateTime?>("DeletedAt").HasColumnType("datetime2");
+                    b.Property<decimal>("DebtToIncomeRatio").HasPrecision(5, 4).HasColumnType("decimal(5,4)");
+                    b.Property<DateTime>("EvaluationDate").HasColumnType("datetime2");
+                    b.Property<DateTime>("ExpirationDate").HasColumnType("datetime2");
+                    b.Property<bool>("IsApproved").HasColumnType("bit");
+                    b.Property<bool>("IsDeleted").HasDefaultValue(false).HasColumnType("bit");
+                    b.Property<decimal>("MaximumAmount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<int>("MaximumTerm").HasColumnType("int");
+                    b.Property<decimal>("MonthlyInstallmentEstimate").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<string>("RejectionReason").HasColumnType("nvarchar(max)");
+                    b.Property<decimal>("RequestedAmount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
+                    b.Property<string>("RequestedLoanType").IsRequired().HasColumnType("nvarchar(max)");
+                    b.Property<int>("RequestedTerm").HasColumnType("int");
+                    b.Property<string>("RiskLevel").IsRequired().HasColumnType("nvarchar(max)");
+                    b.HasKey("Id");
+                    b.HasIndex("CustomerId");
+                    b.ToTable("LoanEvaluations");
                 });
 
             modelBuilder.Entity("CreditCase.Domain.Entities.Payment", b =>
@@ -112,6 +147,16 @@ namespace CreditCase.Infrastructure.Migrations
                     b.Navigation("Customer");
                 });
 
+            modelBuilder.Entity("CreditCase.Domain.Entities.LoanEvaluationResult", b =>
+                {
+                    b.HasOne("CreditCase.Domain.Entities.Customer", "Customer")
+                        .WithMany("LoanEvaluations")
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                    b.Navigation("Customer");
+                });
+
             modelBuilder.Entity("CreditCase.Domain.Entities.Payment", b =>
                 {
                     b.HasOne("CreditCase.Domain.Entities.Installment", "Installment")
@@ -125,6 +170,7 @@ namespace CreditCase.Infrastructure.Migrations
             modelBuilder.Entity("CreditCase.Domain.Entities.Customer", b =>
                 {
                     b.Navigation("Loans");
+                    b.Navigation("LoanEvaluations");
                 });
 
             modelBuilder.Entity("CreditCase.Domain.Entities.Installment", b =>

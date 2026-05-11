@@ -1,4 +1,5 @@
 using CreditCase.Application.DTOs.Customers;
+using CreditCase.Application.DTOs.LoanEvaluation;
 using CreditCase.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,10 +10,12 @@ namespace CreditCase.Api.Controllers;
 public class CustomersController : ControllerBase
 {
     private readonly ICustomerService _customerService;
+    private readonly ILoanEvaluationService _evaluationService;
 
-    public CustomersController(ICustomerService customerService)
+    public CustomersController(ICustomerService customerService, ILoanEvaluationService evaluationService)
     {
         _customerService = customerService;
+        _evaluationService = evaluationService;
     }
 
     /// <summary>
@@ -68,6 +71,17 @@ public class CustomersController : ControllerBase
     {
         var customer = await _customerService.UpdateAsync(id, request);
         return Ok(customer);
+    }
+
+    /// <summary>
+    /// Müşterinin tüm kredi değerlendirme geçmişini döner.
+    /// </summary>
+    /// <param name="id">Müşteri ID'si</param>
+    [HttpGet("{id:int}/evaluations")]
+    public async Task<ActionResult<IEnumerable<LoanEvaluationResponse>>> GetEvaluations(int id)
+    {
+        var evaluations = await _evaluationService.GetByCustomerIdAsync(id);
+        return Ok(evaluations);
     }
 
     /// <summary>

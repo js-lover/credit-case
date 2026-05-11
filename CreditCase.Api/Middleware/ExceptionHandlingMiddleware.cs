@@ -3,6 +3,8 @@ using System.Text.Json;
 using CreditCase.Application.Exceptions;
 using FluentValidation;
 
+#pragma warning disable CA1812 // instantiated via DI
+
 namespace CreditCase.Api.Middleware;
 
 public class ExceptionHandlingMiddleware
@@ -25,6 +27,22 @@ public class ExceptionHandlingMiddleware
         catch (NotFoundException ex)
         {
             await WriteErrorResponse(context, HttpStatusCode.NotFound, "NotFound", ex.Message);
+        }
+        catch (LoanApplicationDeniedException ex)
+        {
+            await WriteErrorResponse(context, HttpStatusCode.UnprocessableEntity, "LoanDenied", ex.Message);
+        }
+        catch (InsufficientCreditScoreException ex)
+        {
+            await WriteErrorResponse(context, HttpStatusCode.UnprocessableEntity, "InsufficientCreditScore", ex.Message);
+        }
+        catch (ExcessiveDebtRatioException ex)
+        {
+            await WriteErrorResponse(context, HttpStatusCode.UnprocessableEntity, "ExcessiveDebtRatio", ex.Message);
+        }
+        catch (InvalidCustomerProfileException ex)
+        {
+            await WriteErrorResponse(context, HttpStatusCode.UnprocessableEntity, "InvalidCustomerProfile", ex.Message);
         }
         catch (BusinessRuleException ex)
         {

@@ -5,8 +5,16 @@ using CreditCase.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// localhost ve 127.0.0.1 aynı makinedir; tarayıcılar ikisini farklı origin olarak
+// değerlendirdiğinden her ikisi de açıkça izin verilenler listesine alınır.
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
-    p.WithOrigins("http://localhost:5173").AllowAnyHeader().AllowAnyMethod()));
+    p.SetIsOriginAllowed(origin =>
+    {
+        var host = new Uri(origin).Host;
+        return host == "localhost" || host == "127.0.0.1";
+    })
+    .AllowAnyHeader()
+    .AllowAnyMethod()));
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -23,6 +31,7 @@ builder.Services.AddInfrastructureServices(builder.Configuration);
 var app = builder.Build();
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseRouting();
 app.UseCors();
 
 if (app.Environment.IsDevelopment())
