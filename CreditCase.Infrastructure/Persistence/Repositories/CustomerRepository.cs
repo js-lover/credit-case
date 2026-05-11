@@ -22,6 +22,9 @@ public class CustomerRepository : ICustomerRepository
     public async Task<Customer?> GetByIdentityNumberAsync(string identityNumber)
         => await _context.Customers.FirstOrDefaultAsync(c => c.IdentityNumber == identityNumber);
 
+    public async Task<Customer?> GetByEmailAsync(string email)
+        => await _context.Customers.FirstOrDefaultAsync(c => c.Email == email);
+
     public async Task<Customer?> GetByIdWithLoansAndInstallmentsAsync(int id)
         => await _context.Customers
             .Include(c => c.Loans)
