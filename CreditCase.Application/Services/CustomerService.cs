@@ -78,6 +78,29 @@ public class CustomerService : ICustomerService
         await _customerRepository.DeleteAsync(customer);
     }
 
+    public async Task<CustomerSummaryResponse> GetSummaryAsync(int id)
+    {
+        var customer = await _customerRepository.GetByIdWithLoansAndInstallmentsAsync(id);
+        if (customer is null)
+            throw new NotFoundException($"Customer with ID {id} not found.");
+
+        var allInstallments = customer.Loans.SelectMany(l => l.Installments).ToList();
+
+        return new CustomerSummaryResponse
+        {
+            CustomerId = customer.Id,
+            FullName = $"{customer.FirstName} {customer.LastName}",
+            TotalLoans = customer.Loans.Count,
+            TotalRemainingPrincipal = customer.Loans.Sum(l => l.RemainingPrincipal),
+            TotalOutstandingDebt = allInstallments
+                .Where(i => i.Status != Domain.Enums.InstallmentStatus.Paid)
+                .Sum(i => i.Amount),
+            PaidInstallments = allInstallments.Count(i => i.Status == Domain.Enums.InstallmentStatus.Paid),
+            UnpaidInstallments = allInstallments.Count(i => i.Status == Domain.Enums.InstallmentStatus.Unpaid),
+            OverdueInstallments = allInstallments.Count(i => i.Status == Domain.Enums.InstallmentStatus.Overdue)
+        };
+    }
+
     private static CustomerResponse MapToResponse(Customer customer) => new()
     {
         Id = customer.Id,
