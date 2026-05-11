@@ -15,6 +15,9 @@ public class PaymentsController : ControllerBase
         _paymentService = paymentService;
     }
 
+    /// <summary>
+    /// Sistemdeki tüm ödemeleri listeler.
+    /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
@@ -22,6 +25,11 @@ public class PaymentsController : ControllerBase
         return Ok(payments);
     }
 
+    /// <summary>
+    /// Belirtilen taksit için ödeme gerçekleştirir.
+    /// Aynı taksit için ikinci ödeme yapılamaz; zaten ödenmiş taksit tekrar ödenemez.
+    /// Başarılı ödeme sonrası kredinin kalan ana parası güncellenir.
+    /// </summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreatePaymentRequest request)
     {

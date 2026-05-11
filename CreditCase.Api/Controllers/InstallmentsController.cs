@@ -15,6 +15,10 @@ public class InstallmentsController : ControllerBase
         _installmentService = installmentService;
     }
 
+    /// <summary>
+    /// Tüm taksitleri listeler. Vadesi geçmiş ve ödenmemiş taksitler
+    /// otomatik olarak <c>Overdue</c> statüsüne alındıktan sonra döner.
+    /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
@@ -22,6 +26,10 @@ public class InstallmentsController : ControllerBase
         return Ok(installments);
     }
 
+    /// <summary>
+    /// Belirtilen ID'ye sahip taksiti ödeme bilgisiyle birlikte döner.
+    /// </summary>
+    /// <param name="id">Taksit ID'si</param>
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
@@ -29,6 +37,11 @@ public class InstallmentsController : ControllerBase
         return Ok(installment);
     }
 
+    /// <summary>
+    /// Taksit durumunu günceller.
+    /// </summary>
+    /// <param name="id">Taksit ID'si</param>
+    /// <param name="request">Yeni durum bilgisi</param>
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateInstallmentRequest request)
     {
