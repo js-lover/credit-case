@@ -29,14 +29,16 @@ namespace CreditCase.Infrastructure.Migrations
                         .HasColumnType("int");
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
                     b.Property<DateTime>("CreatedAt").HasColumnType("datetime2");
+                    b.Property<DateTime?>("DeletedAt").HasColumnType("datetime2");
                     b.Property<string>("Email").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
                     b.Property<string>("FirstName").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
                     b.Property<string>("IdentityNumber").IsRequired().HasMaxLength(11).HasColumnType("nvarchar(11)");
+                    b.Property<bool>("IsDeleted").HasDefaultValue(false).HasColumnType("bit");
                     b.Property<string>("LastName").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
                     b.Property<string>("PhoneNumber").IsRequired().HasMaxLength(20).HasColumnType("nvarchar(20)");
                     b.HasKey("Id");
-                    b.HasIndex("Email").IsUnique();
-                    b.HasIndex("IdentityNumber").IsUnique();
+                    b.HasIndex("Email").IsUnique().HasFilter("[IsDeleted] = 0");
+                    b.HasIndex("IdentityNumber").IsUnique().HasFilter("[IsDeleted] = 0");
                     b.ToTable("Customers");
                 });
 
