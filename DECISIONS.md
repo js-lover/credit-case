@@ -113,17 +113,17 @@ Her karar için şu soruyu yanıtlar: **"Bu neden böyle yapıldı / yapılmadı
 
 ---
 
-### K-13 · Cascade delete
+### K-13 · Cascade delete (FK konfigürasyonu)
 
 **Karar:** `Customer → Loan → Installment → Payment` zincirinde her seviye `OnDelete(DeleteBehavior.Cascade)` ile tanımlandı.
 
-**Gerekçe:** Müşteri silindiğinde ait olduğu kredilerin, taksitlerin ve ödemelerin varlığını sürdürmesi anlamsızdır; yetim kayıt (orphan record) oluşturur. Bankacılık sistemlerinde müşteri silme işlemi zaten nadirdir ve bu davranış bilinçli bir iş kararıdır. Daha katı bir yaklaşımda soft-delete tercih edilebilir.
+**Gerekçe:** FK kısıtının tutarlı kalması için cascade tanımı gereklidir. Soft delete uygulandığından (bkz. K-17) `Customer` kaydı veritabanından hiçbir zaman fiziksel olarak silinmez; dolayısıyla cascade zinciri artık tetiklenmez. Tanım konfigürasyonda kalmaya devam eder ancak pasif durumdadır.
 
 ---
 
-### K-15 · Email alanında benzersizlik (unique index + servis guard'ı)
+### K-15 · Email ve IdentityNumber alanlarında benzersizlik (filtered unique index + servis guard'ı)
 
-**Karar:** `Customers.Email` kolonu hem veritabanı düzeyinde (`UNIQUE INDEX IX_Customers_Email`) hem uygulama katmanında (`CustomerService`) benzersiz olarak zorlanır. `IdentityNumber` için uygulanan örüntünün aynısı takip edildi.
+**Karar:** `Customers.Email` ve `Customers.IdentityNumber` kolonları hem veritabanı düzeyinde hem uygulama katmanında (`CustomerService`) benzersiz olarak zorlanır. Soft delete (K-17) eklendikten sonra index'ler `WHERE IsDeleted = 0` filtreli hale getirildi.
 
 **Gerekçe:** E-posta adresi bankacılık sistemlerinde bildirim, şifre sıfırlama ve kimlik doğrulama kanalı olarak kullanılır. İki müşterinin aynı e-postaya sahip olması hem işlevsel (hangi müşteriye bildirim gönderilecek?) hem güvenlik (farklı kişinin hesabına erişim riski) açısından sorunludur. `PhoneNumber` ise bireysel bankacılıkta unique beklense de gerçek hayatta istisnalar mevcuttur — aynı hane halkı, vasi-veli ilişkisi, kurumsal hesaplar. Bu sınır durumları gözetilerek telefon unique yapılmadı; email için bu gerekçeler geçerli değildir.
 
@@ -145,6 +145,20 @@ if (!string.Equals(customer.Email, request.Email, StringComparison.OrdinalIgnore
 ```
 
 Veritabanı index'i, uygulama katmanı kontrolünü atlatabilecek eş zamanlı yazma senaryolarına karşı son güvence hattı işlevi görür.
+
+**Soft delete sonrası filtered index:** Soft-deleted bir müşterinin TC/e-posta değeriyle yeni kayıt açılabilmesi için standart unique index yeterli değildir — silinmiş kayıt hâlâ tabloda bulunduğundan DB constraint ihlali oluşurdu. Bu nedenle index'ler `WHERE IsDeleted = 0` filtreli olarak yeniden oluşturuldu:
+
+```sql
+CREATE UNIQUE INDEX IX_Customers_Email ON Customers(Email) WHERE IsDeleted = 0;
+CREATE UNIQUE INDEX IX_Customers_IdentityNumber ON Customers(IdentityNumber) WHERE IsDeleted = 0;
+```
+
+EF Core `AppDbContext`'teki karşılığı:
+
+```csharp
+entity.HasIndex(e => e.Email).IsUnique().HasFilter("[IsDeleted] = 0");
+entity.HasIndex(e => e.IdentityNumber).IsUnique().HasFilter("[IsDeleted] = 0");
+```
 
 ---
 
@@ -181,6 +195,70 @@ await _context.Installments
 `Status == Unpaid` koşulu sayesinde zaten `Overdue` olan taksitler tekrar hedeflenmez. Aynı sorgu kaç kez çalıştırılırsa çalıştırılsın sonuç değişmez — set semantiği üzerine kurulu idempotency.
 
 **Sınır:** Her iki teknik de _uygulama düzeyinde_ koruma sağlar. Eş zamanlı iki isteğin her iki guard'ı da geçmesi (read-modify-write yarışı) teorik olarak mümkündür. Bu sınırın nasıl giderilebileceği için bkz. [YK-11](#yk-11--http-düzeyi-idempotency-key).
+
+---
+
+### K-17 · Soft Delete — müşteri kaydı
+
+**Karar:** `DELETE /api/customers/{id}` endpoint'i kayıtları fiziksel olarak silmez; `Customer.IsDeleted = true` ve `Customer.DeletedAt = UtcNow` set eder. EF Core global query filter (`HasQueryFilter(e => !e.IsDeleted)`) silinmiş kayıtları tüm sorgulardan otomatik olarak dışlar.
+
+**Gerekçe:** Finansal sistemlerde müşteri kaydının silinmesi denetim izini (audit trail) yok eder:
+- Silinmiş müşterinin kredi, taksit ve ödeme geçmişi `CASCADE DELETE` ile birlikte kalıcı kaybolur.
+- BDDK gibi düzenleyici kurumlar finansal verilerin yıllarca saklanmasını zorunlu kılar.
+- Hard delete geri alınamaz; soft delete her zaman geri döndürülebilir.
+
+**Uygulama:**
+
+```csharp
+// Domain/Entities/Customer.cs
+public bool IsDeleted { get; set; } = false;
+public DateTime? DeletedAt { get; set; }
+
+// Infrastructure/Persistence/AppDbContext.cs
+entity.HasQueryFilter(e => !e.IsDeleted); // tüm sorgular otomatik filtreli
+
+// Infrastructure/Persistence/Repositories/CustomerRepository.cs
+public async Task DeleteAsync(Customer customer)
+{
+    customer.IsDeleted = true;
+    customer.DeletedAt = DateTime.UtcNow;
+    _context.Customers.Update(customer);
+    await _context.SaveChangesAsync();
+}
+```
+
+**Migration:** `20260511000002_AddSoftDeleteToCustomer` — `IsDeleted` ve `DeletedAt` kolonları, filtered unique index'ler.
+
+**UI etkisi:** Kullanıcı için davranış değişmez; silinen müşteri listede görünmez. Veri DB'de korunur.
+
+---
+
+### K-18 · Giriş Validasyonu — TC Kimlik No ve Telefon Numarası
+
+**Karar:** `CreateCustomerRequestValidator` ve yeni eklenen `UpdateCustomerRequestValidator`'a format kuralları eklendi.
+
+**Problem:** Önceden `IdentityNumber` yalnızca 11 karakter uzunluğunu kontrol ediyordu; harfli giriş (örn. `"ABCDEFGHIJK"`) kabul ediliyordu. `PhoneNumber` için hiçbir format kuralı yoktu; `"123"` veya `"abc"` geçerli sayılıyordu. Ayrıca `UpdateAsync` metodu hiç validator çağırmıyordu — güncelleme isteklerinde bu kurallar atlanabiliyordu.
+
+**Çözüm:**
+
+```csharp
+// CreateCustomerRequestValidator
+RuleFor(x => x.IdentityNumber)
+    .Matches(@"^\d{11}$").WithMessage("Identity number must be exactly 11 digits.");
+
+RuleFor(x => x.PhoneNumber)
+    .Matches(@"^\d{10,11}$").WithMessage("Phone number must be 10 or 11 digits.");
+
+// UpdateCustomerRequestValidator (yeni dosya)
+// FirstName, LastName, Email kurallarına ek olarak:
+RuleFor(x => x.PhoneNumber)
+    .Matches(@"^\d{10,11}$").WithMessage("Phone number must be 10 or 11 digits.");
+
+// CustomerService.UpdateAsync — ilk satır olarak eklendi
+await _updateValidator.ValidateAndThrowAsync(request);
+```
+
+**Not:** `UpdateCustomerRequest`'te `IdentityNumber` alanı bulunmaz; TC düzenleme iş kuralı gereği mümkün değildir.
 
 ---
 
@@ -233,10 +311,9 @@ CQRS, okuma ve yazma modellerinin birbirinden önemli ölçüde farklılaştığ
 
 ---
 
-### YK-06 · Soft Delete
+### YK-06 · Soft Delete ~~uygulanmadı~~ → **K-17 olarak uygulandı**
 
-**Neden uygulanmadı:**
-Soft delete (kayıtların fiziksel olarak silinmemesi; `IsDeleted` flag'i ile işaretlenmesi) gerçek bankacılık sistemlerinde denetim (audit) gereksinimleri nedeniyle zorunludur. Bu projede scope dışı olduğu değerlendirildi; cascade delete basit ve tutarlı bir sonuç üretmektedir. Üretim sistemine taşınacaksa ilk eklenecek özellik soft delete olmalıdır.
+**Durum güncellendi:** Bu karar başlangıçta "yapılmayan" olarak sınıflandırılmıştı. Finansal sistemlerde müşteri verisinin kalıcı silinmesinin denetim ve yasal uyum açısından yarattığı riskler değerlendirilerek soft delete uygulamaya alındı. Detaylar için bkz. **K-17**.
 
 ---
 
