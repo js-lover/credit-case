@@ -37,7 +37,7 @@ public class InstallmentService : IInstallmentService
     {
         var installment = await _installmentRepository.GetByIdAsync(id);
         if (installment is null)
-            throw new NotFoundException($"Installment with ID {id} not found.");
+            throw new NotFoundException($"{id} numaralı taksit bulunamadı.");
         return MapToResponse(installment);
     }
 
@@ -45,7 +45,7 @@ public class InstallmentService : IInstallmentService
     {
         var installment = await _installmentRepository.GetByIdAsync(id);
         if (installment is null)
-            throw new NotFoundException($"Installment with ID {id} not found.");
+            throw new NotFoundException($"{id} numaralı taksit bulunamadı.");
 
         installment.Status = request.Status;
         var updated = await _installmentRepository.UpdateAsync(installment);
@@ -60,6 +60,7 @@ public class InstallmentService : IInstallmentService
         Amount = installment.Amount,
         DueDate = installment.DueDate,
         Status = installment.Status,
+        IsBalloon = installment.IsBalloon,
         Payment = installment.Payment is null ? null : new PaymentResponse
         {
             Id = installment.Payment.Id,

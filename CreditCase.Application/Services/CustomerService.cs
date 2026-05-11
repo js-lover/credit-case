@@ -36,7 +36,7 @@ public class CustomerService : ICustomerService
     {
         var customer = await _customerRepository.GetByIdAsync(id);
         if (customer is null)
-            throw new NotFoundException($"Customer with ID {id} not found.");
+            throw new NotFoundException($"{id} numaralı müşteri bulunamadı.");
         return MapToResponse(customer);
     }
 
@@ -50,11 +50,11 @@ public class CustomerService : ICustomerService
         // Aynı TC kimlik numarasıyla başka aktif müşteri olup olmadığını kontrol et.
         var existing = await _customerRepository.GetByIdentityNumberAsync(request.IdentityNumber);
         if (existing is not null)
-            throw new BusinessRuleException("A customer with this identity number already exists.");
+            throw new BusinessRuleException("Bu TC kimlik numarasına ait bir müşteri zaten mevcut.");
 
         var existingEmail = await _customerRepository.GetByEmailAsync(request.Email);
         if (existingEmail is not null)
-            throw new BusinessRuleException("A customer with this email already exists.");
+            throw new BusinessRuleException("Bu e-posta adresine ait bir müşteri zaten mevcut.");
 
         var customer = new Customer
         {
@@ -63,7 +63,11 @@ public class CustomerService : ICustomerService
             IdentityNumber = request.IdentityNumber,
             Email = request.Email,
             PhoneNumber = request.PhoneNumber,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            DateOfBirth = request.DateOfBirth,
+            MonthlyIncome = request.MonthlyIncome,
+            ProfessionCategory = request.ProfessionCategory,
+            EmploymentStatus = request.EmploymentStatus
         };
 
         var created = await _customerRepository.AddAsync(customer);
@@ -81,20 +85,24 @@ public class CustomerService : ICustomerService
 
         var customer = await _customerRepository.GetByIdAsync(id);
         if (customer is null)
-            throw new NotFoundException($"Customer with ID {id} not found.");
+            throw new NotFoundException($"{id} numaralı müşteri bulunamadı.");
 
         // E-posta değişmiyorsa benzersizlik sorgusu gereksizdir ve yanlış redde yol açar.
         if (!string.Equals(customer.Email, request.Email, StringComparison.OrdinalIgnoreCase))
         {
             var existingEmail = await _customerRepository.GetByEmailAsync(request.Email);
             if (existingEmail is not null)
-                throw new BusinessRuleException("A customer with this email already exists.");
+                throw new BusinessRuleException("Bu e-posta adresine ait bir müşteri zaten mevcut.");
         }
 
         customer.FirstName = request.FirstName;
         customer.LastName = request.LastName;
         customer.Email = request.Email;
         customer.PhoneNumber = request.PhoneNumber;
+        customer.DateOfBirth = request.DateOfBirth;
+        customer.MonthlyIncome = request.MonthlyIncome;
+        customer.ProfessionCategory = request.ProfessionCategory;
+        customer.EmploymentStatus = request.EmploymentStatus;
 
         var updated = await _customerRepository.UpdateAsync(customer);
         return MapToResponse(updated);
@@ -103,12 +111,26 @@ public class CustomerService : ICustomerService
     /// <summary>
     /// Müşteriyi soft delete eder. Fiziksel silme yapılmaz; finans sektöründe
     /// kredi/ödeme geçmişinin korunması yasal ve denetim açısından zorunludur.
+    /// Aktif borcu olan müşteri silinemez; tüm kredilerin kapatılması gerekir.
     /// </summary>
     public async Task DeleteAsync(int id)
     {
-        var customer = await _customerRepository.GetByIdAsync(id);
+        // Aktif kredi kontrolü için Loans eager load gerekir.
+        var customer = await _customerRepository.GetByIdWithLoansAndInstallmentsAsync(id);
         if (customer is null)
-            throw new NotFoundException($"Customer with ID {id} not found.");
+            throw new NotFoundException($"{id} numaralı müşteri bulunamadı.");
+
+        var activeLoans = customer.Loans
+            .Where(l => l.Status == Domain.Enums.LoanStatus.Active)
+            .ToList();
+
+        if (activeLoans.Count > 0)
+        {
+            decimal totalDebt = activeLoans.Sum(l => l.RemainingPrincipal);
+            throw new BusinessRuleException(
+                $"Müşterinin {activeLoans.Count} aktif kredisi ve toplam {totalDebt:N2} TL borcu bulunmaktadır. " +
+                "Tüm borçlar kapatılmadan müşteri silinemez.");
+        }
 
         await _customerRepository.DeleteAsync(customer);
     }
@@ -121,7 +143,7 @@ public class CustomerService : ICustomerService
         // Borç hesaplaması taksit düzeyinde yapıldığı için Loans + Installments eager load gerekir.
         var customer = await _customerRepository.GetByIdWithLoansAndInstallmentsAsync(id);
         if (customer is null)
-            throw new NotFoundException($"Customer with ID {id} not found.");
+            throw new NotFoundException($"{id} numaralı müşteri bulunamadı.");
 
         var allInstallments = customer.Loans.SelectMany(l => l.Installments).ToList();
 
@@ -148,6 +170,10 @@ public class CustomerService : ICustomerService
         IdentityNumber = customer.IdentityNumber,
         Email = customer.Email,
         PhoneNumber = customer.PhoneNumber,
-        CreatedAt = customer.CreatedAt
+        CreatedAt = customer.CreatedAt,
+        DateOfBirth = customer.DateOfBirth,
+        MonthlyIncome = customer.MonthlyIncome,
+        ProfessionCategory = customer.ProfessionCategory,
+        EmploymentStatus = customer.EmploymentStatus
     };
 }

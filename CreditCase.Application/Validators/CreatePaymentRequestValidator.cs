@@ -7,7 +7,7 @@ public class CreatePaymentRequestValidator : AbstractValidator<CreatePaymentRequ
 {
     public CreatePaymentRequestValidator()
     {
-        RuleFor(x => x.InstallmentId).GreaterThan(0).WithMessage("A valid installment ID is required.");
-        RuleFor(x => x.PaymentAmount).GreaterThan(0).WithMessage("Payment amount must be greater than 0.");
+        RuleFor(x => x.InstallmentId).GreaterThan(0).WithMessage("Geçerli bir taksit ID'si girilmelidir.");
+        RuleFor(x => x.PaymentAmount).GreaterThan(0).WithMessage("Ödeme tutarı sıfırdan büyük olmalıdır.");
     }
 }

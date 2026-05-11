@@ -11,5 +11,6 @@ public class InstallmentResponse
     public decimal Amount { get; set; }
     public DateTime DueDate { get; set; }
     public InstallmentStatus Status { get; set; }
+    public bool IsBalloon { get; set; }
     public PaymentResponse? Payment { get; set; }
 }
