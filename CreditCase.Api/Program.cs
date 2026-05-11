@@ -5,6 +5,9 @@ using CreditCase.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
+    p.WithOrigins("http://localhost:5173").AllowAnyHeader().AllowAnyMethod()));
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -20,6 +23,7 @@ builder.Services.AddInfrastructureServices(builder.Configuration);
 var app = builder.Build();
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseCors();
 
 if (app.Environment.IsDevelopment())
 {

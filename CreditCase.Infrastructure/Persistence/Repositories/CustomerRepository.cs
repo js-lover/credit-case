@@ -47,7 +47,9 @@ public class CustomerRepository : ICustomerRepository
 
     public async Task DeleteAsync(Customer customer)
     {
-        _context.Customers.Remove(customer);
+        customer.IsDeleted = true;
+        customer.DeletedAt = DateTime.UtcNow;
+        _context.Customers.Update(customer);
         await _context.SaveChangesAsync();
     }
 }

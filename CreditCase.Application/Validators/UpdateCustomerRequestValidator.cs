@@ -3,15 +3,12 @@ using FluentValidation;
 
 namespace CreditCase.Application.Validators;
 
-public class CreateCustomerRequestValidator : AbstractValidator<CreateCustomerRequest>
+public class UpdateCustomerRequestValidator : AbstractValidator<UpdateCustomerRequest>
 {
-    public CreateCustomerRequestValidator()
+    public UpdateCustomerRequestValidator()
     {
         RuleFor(x => x.FirstName).NotEmpty().WithMessage("First name is required.");
         RuleFor(x => x.LastName).NotEmpty().WithMessage("Last name is required.");
-        RuleFor(x => x.IdentityNumber)
-            .NotEmpty().WithMessage("Identity number is required.")
-            .Matches(@"^\d{11}$").WithMessage("Identity number must be exactly 11 digits.");
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email is required.")
             .EmailAddress().WithMessage("Invalid email format.");
