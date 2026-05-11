@@ -15,6 +15,9 @@ public class LoansController : ControllerBase
         _loanService = loanService;
     }
 
+    /// <summary>
+    /// Sistemdeki tüm kredileri listeler.
+    /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
@@ -22,6 +25,10 @@ public class LoansController : ControllerBase
         return Ok(loans);
     }
 
+    /// <summary>
+    /// Belirtilen ID'ye sahip krediyi taksit planı ve ödeme bilgileriyle birlikte döner.
+    /// </summary>
+    /// <param name="id">Kredi ID'si</param>
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
@@ -29,6 +36,10 @@ public class LoansController : ControllerBase
         return Ok(loan);
     }
 
+    /// <summary>
+    /// Yeni kredi oluşturur. Kredi skoru onaylandıktan sonra taksit planı otomatik üretilir.
+    /// Taksit tutarı düz faiz (flat-rate) yöntemiyle hesaplanır.
+    /// </summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateLoanRequest request)
     {
