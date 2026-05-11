@@ -22,10 +22,17 @@ public class AppDbContext : DbContext
             entity.Property(e => e.FirstName).IsRequired().HasMaxLength(100);
             entity.Property(e => e.LastName).IsRequired().HasMaxLength(100);
             entity.Property(e => e.IdentityNumber).IsRequired().HasMaxLength(11);
-            entity.HasIndex(e => e.IdentityNumber).IsUnique();
             entity.Property(e => e.Email).IsRequired().HasMaxLength(200);
-            entity.HasIndex(e => e.Email).IsUnique();
             entity.Property(e => e.PhoneNumber).HasMaxLength(20);
+            entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+
+            // Filtered unique indexes: silinmiş kayıtlar kısıtın dışında tutulur.
+            // Soft-deleted bir müşterinin TC/e-postasıyla yeni kayıt açılabilmesini sağlar.
+            entity.HasIndex(e => e.IdentityNumber).IsUnique().HasFilter("[IsDeleted] = 0");
+            entity.HasIndex(e => e.Email).IsUnique().HasFilter("[IsDeleted] = 0");
+
+            // Soft-delete global filtresi: tüm sorgular IsDeleted=false olanları getirir.
+            entity.HasQueryFilter(e => !e.IsDeleted);
         });
 
         modelBuilder.Entity<Loan>(entity =>

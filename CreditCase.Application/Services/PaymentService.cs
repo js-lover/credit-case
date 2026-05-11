@@ -64,10 +64,14 @@ public class PaymentService : IPaymentService
         var loan = await _loanRepository.GetByIdWithInstallmentsAsync(installment.LoanId);
         if (loan is not null)
         {
-            var unpaidCount = loan.Installments.Count(i => i.Status != InstallmentStatus.Paid);
-            loan.RemainingPrincipal = Math.Round(loan.PrincipalAmount / loan.Term * unpaidCount, 2);
-            if (unpaidCount == 0)
+            // RemainingPrincipal = sum of all installments not yet paid
+            loan.RemainingPrincipal = loan.Installments
+                .Where(i => i.Status != InstallmentStatus.Paid)
+                .Sum(i => i.Amount);
+
+            if (loan.RemainingPrincipal == 0)
                 loan.Status = LoanStatus.Closed;
+
             await _loanRepository.UpdateAsync(loan);
         }
 
