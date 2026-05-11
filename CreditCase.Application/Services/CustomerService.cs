@@ -40,6 +40,10 @@ public class CustomerService : ICustomerService
         if (existing is not null)
             throw new BusinessRuleException("A customer with this identity number already exists.");
 
+        var existingEmail = await _customerRepository.GetByEmailAsync(request.Email);
+        if (existingEmail is not null)
+            throw new BusinessRuleException("A customer with this email already exists.");
+
         var customer = new Customer
         {
             FirstName = request.FirstName,
@@ -59,6 +63,13 @@ public class CustomerService : ICustomerService
         var customer = await _customerRepository.GetByIdAsync(id);
         if (customer is null)
             throw new NotFoundException($"Customer with ID {id} not found.");
+
+        if (!string.Equals(customer.Email, request.Email, StringComparison.OrdinalIgnoreCase))
+        {
+            var existingEmail = await _customerRepository.GetByEmailAsync(request.Email);
+            if (existingEmail is not null)
+                throw new BusinessRuleException("A customer with this email already exists.");
+        }
 
         customer.FirstName = request.FirstName;
         customer.LastName = request.LastName;
