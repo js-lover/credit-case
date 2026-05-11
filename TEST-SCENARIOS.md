@@ -54,14 +54,15 @@ Her test **AAA** (Arrange · Act · Assert) desenini izler:
 
 > **Neden 8. test önemli?** `UpdateAsync` email değiştirilmiyorsa veritabanı sorgusu yapmaz. Bu; hem gereksiz sorgudan kaçınır, hem de "kendi emailine güncelleme" senaryosunun hatalı reddedilmesini engeller.
 
-### Silme (Soft Delete)
+### Silme (Soft Delete + Aktif Borç Kontrolü)
 
 | # | Test Adı | Senaryo | Beklenen |
 |---|---|---|---|
 | 9 | `DeleteAsync_WithNonExistingId_ThrowsNotFoundException` | Olmayan ID silinmeye çalışılıyor | `NotFoundException` |
 | 10 | `DeleteAsync_WithExistingId_CallsRepositoryDelete` | Var olan ID soft-delete ediliyor | `DeleteAsync` tam bir kez çağrılmalı |
+| 11 | `DeleteAsync_WithActiveLoans_ThrowsBusinessRuleException` | Müşterinin aktif kredisi var | `BusinessRuleException` — borç tutarı mesajda yer almalı |
 
-> **Not:** `DeleteAsync` artık `_context.Customers.Remove()` çağırmaz; `IsDeleted = true` ve `DeletedAt = UtcNow` set ederek `Update()` çağırır. Test #10, repository'nin çağrıldığını doğrular; fiziksel silme olmadığı implementation detayıdır (bkz. K-17).
+> **Not:** `DeleteAsync`, önce müşterinin aktif kredilerini kontrol eder. Aktif kredi varsa borç miktarını içeren Türkçe mesajla `422` döner. Aksi hâlde `IsDeleted = true` ve `DeletedAt = UtcNow` set ederek `Update()` çağırır (K-17).
 
 ---
 
@@ -138,6 +139,23 @@ RemainingPrincipal = unpaid installments'ların Sum(Amount)
 |---|---|---|---|
 | 27 | `CreateAsync_WithNonExistingInstallment_ThrowsNotFoundException` | InstallmentId veritabanında yok | `NotFoundException` |
 
+### Sıralı Ödeme Kuralı
+
+| # | Test Adı | Senaryo | Beklenen |
+|---|---|---|---|
+| 28 | `CreateAsync_WithEarlierUnpaidInstallment_ThrowsBusinessRuleException` | Taksit #3 ödenmek isteniyor; #1 ve #2 hâlâ Unpaid | `BusinessRuleException` — "Önceki ödenmemiş taksitler önce ödenmelidir." |
+
+> Sıralı ödeme kuralı hem API hem frontend düzeyinde uygulanır. Bu test backend guard'ını doğrular; frontend "Öde" butonu sadece en düşük numaralı Unpaid taksite görünür.
+
+### Ödeme Geçmişi Bonusu (CreditScoreBonus)
+
+| # | Test Adı | Senaryo | Beklenen |
+|---|---|---|---|
+| 29 | `CreateAsync_WithOnTimePayment_IncreasesCreditScoreBonus` | Vade tarihi bugün veya ileride, ödeme yapılıyor | `customer.CreditScoreBonus` +5 artmalı |
+| 30 | `CreateAsync_WithLatePayment_DecreasesCreditScoreBonus` | Vade tarihi geçmiş, ödeme yapılıyor | `customer.CreditScoreBonus` −10 azalmalı |
+
+> Test #29 ve #30, `PaymentService`'in `ICustomerRepository.UpdateAsync` çağırdığını ve `CreditScoreBonus` değerini doğru yönde değiştirdiğini doğrular.
+
 ---
 
 ## InstallmentService Testleri
@@ -172,7 +190,7 @@ RemainingPrincipal = unpaid installments'ların Sum(Amount)
 ## Test Sonuçları
 
 ```
-Başarılı: 33   Başarısız: 0   Atlanan: 0   Toplam: 33
+Başarılı: 48   Başarısız: 0   Atlanan: 0   Toplam: 48
 ```
 
 ---
@@ -214,8 +232,7 @@ Aşağıdaki senaryolar mevcut birim test altyapısına eklenmeye hazır; şu an
 ## Test Sonuçları
 
 ```
-Mevcut (birim test): 33   Başarısız: 0   Atlanan: 0
-Planlanan eklemeler: 13  (34-46 arası — soft delete + validasyon)
+Mevcut (birim test): 48   Başarısız: 0   Atlanan: 0
 ```
 
 ---

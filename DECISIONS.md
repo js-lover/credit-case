@@ -57,11 +57,35 @@ Her karar için şu soruyu yanıtlar: **"Bu neden böyle yapıldı / yapılmadı
 
 ---
 
-### K-06 · Düz (flat-rate) faiz yöntemi
+### K-06 · Faiz sistemi: dinamik oran belirleme + düz faizli taksit hesaplama
 
-**Karar:** Taksit tutarı `totalAmount = principal × (1 + rate/100 × termYears)` / `term` formülüyle hesaplanır. Her taksit eşit tutardadır.
+Bu sistem iki bağımsız bileşenden oluşur; sıkça karıştırılan bu iki kavram birbirinden ayrı ele alınmıştır.
 
-**Gerekçe:** Azalan bakiye (annuity) yöntemi daha gerçekçidir; ancak bu projenin kapsamı faiz modelinin doğruluğu değil, bankacılık domain'inin doğru modellenmesidir. Düz faiz formülü; kolay doğrulanabilir, test edilebilir ve açıklanabilirdir. Gerçek bir üretim sisteminde faiz motoru ayrı bir servis olarak modüler şekilde eklenir.
+**Bileşen 1 — Faiz Oranı Belirleme (`InterestCalculationEngine`):**
+
+Faiz oranı statik değildir; her başvuru için 4 değişkenden dinamik olarak hesaplanır:
+
+```
+Son Faiz = %5 (taban) + Risk Primi + Vade Primi + Tutar Primi − Meslek Bonusu
+
+Risk Primi  : Low=0%, Medium=+5%, High=+12%
+Vade Primi  : ≤6ay=0%, 7-12=+3%, 13-24=+7%, 25-36=+12%, 37-60=+18%, 61-84=+25%, 85+=+35%
+Tutar Primi : ≤2x gelir=0%, 2-3x=+1%, >3x=+2%
+Meslek Bonusu: Kamu=−1%
+```
+
+3 aylık Düşük Risk kredisi %8, 10 yıllık Yüksek Risk kredisi %52 olabilir. Bu gerçekçi bant aralığı, prim kademelerini büyütmek ve vadeye duyarlı yapı kurmakla sağlandı.
+
+**Bileşen 2 — Taksit Hesaplama (`StandardInstallmentStrategy`):**
+
+Faiz oranı belirlendikten sonra taksit planı düz faiz (flat-rate) formülüyle üretilir:
+
+```
+totalAmount   = PrincipalAmount × (1 + InterestRate/100 × termYears)
+monthlyAmount = ROUND(totalAmount / Term, 2)
+```
+
+**Gerekçe:** Azalan bakiye (annuity) yöntemi daha gerçekçidir; ancak bu projenin kapsamı faiz modelinin doğruluğu değil, bankacılık domain'inin doğru modellenmesidir. Düz faiz formülü; kolay doğrulanabilir, test edilebilir ve açıklanabilirdir. Faiz oranı kısmında ise basit sabit oran yerine dinamik motor kullanılmış, bu da projenin domain gerçekçiliğini artırmıştır.
 
 ---
 
@@ -105,11 +129,28 @@ Her karar için şu soruyu yanıtlar: **"Bu neden böyle yapıldı / yapılmadı
 
 ---
 
-### K-12 · Mock CreditScoreService — interface arkasında
+### K-12 · Mock CreditScoreService — interface arkasında, profil tabanlı
 
-**Karar:** `ICreditScoreService` arayüzü `Application` katmanında tanımlandı; `MockCreditScoreService` implementasyonu `Infrastructure` katmanına yerleştirildi ve DI üzerinden bağlandı.
+**Karar:** `ICreditScoreService` arayüzü `Application` katmanında tanımlandı; `MockCreditScoreService` implementasyonu `Infrastructure` katmanına yerleştirildi ve DI üzerinden bağlandı. Başlangıçta ID'ye dayalı deterministik bir değer üretilirken, sonradan **gerçek müşteri profili üzerinden** hesaplama yapacak şekilde yeniden yazıldı.
 
-**Gerekçe:** Gerçek kredi skoru entegrasyonu hazır olduğunda yalnızca `Infrastructure` katmanına yeni bir implementasyon eklenir; `LoanService` hiçbir değişiklik gerektirmez. Bu yaklaşım Açık/Kapalı Prensibi'ni (OCP) doğrudan uygular.
+**Mock Servis Algoritması:**
+
+```csharp
+int baseScore = ScoreAge(dob)          // maks. 200 — 36-50 yaş pik
+              + ScoreIncome(income)    // maks. 250 — Türk bankacılığı gelir bantları
+              + ScoreEmployment(status)// maks. 200 — Aktif=200, İşsiz=20
+              + ScoreProfession(cat);  // maks. 150 — Kamu=150, Mevsimlik=45
+
+int finalScore = Math.Clamp(baseScore + customer.CreditScoreBonus, 0, 1000);
+```
+
+**Neden profil tabanlı yapıldı:**
+
+- ID'ye dayalı belirleyici değer üretmek test ortamında mantıklı görünse de demo ve sunum senaryolarında aynı profil farklı ID'lerle farklı sonuç verebilir; bu tutarsızlık açıklaması güçtür.
+- Gerçek profil bazlı hesap, `DateOfBirth`, `MonthlyIncome`, `EmploymentStatus`, `ProfessionCategory` alanlarının Customer entity'sinde taşınması için somut bir motivasyon yaratır.
+- Sunum sırasında "bu müşteri neden bu faiz oranını aldı?" sorusuna cevap verilebilir.
+
+**Gerekçe (OCP):** Gerçek kredi skoru entegrasyonu hazır olduğunda yalnızca `Infrastructure` katmanına yeni bir implementasyon eklenir; `LoanEvaluationService` hiçbir değişiklik gerektirmez.
 
 ---
 
@@ -372,3 +413,70 @@ Bu yaklaşım iki temel sorunu çözer:
 
 **Neden uygulanmadı:**
 `docker-compose.yml` ile SQL Server container'ı ve uygulama tek komutla ayağa kaldırılabilir. SQL Server container'ı zaten bağımsız olarak çalışmaktadır; uygulama `dotnet run` ile başlatılmaktadır. Bu ölçekte Docker Compose'un sağladığı kolaylık, ek konfigürasyon yükünü karşılamamaktadır. Gerçek bir CI/CD hattına bağlanacak projede Docker Compose veya Kubernetes manifest'i ilk eklenecek altyapı öğesi olurdu.
+
+---
+
+### K-19 · Sıralı Ödeme Kuralı (Sequential Payment)
+
+**Karar:** Taksitler yalnızca `InstallmentNumber` sırasına göre ödenebilir. Önceki ödenmemiş taksit varken ileri bir taksit için `POST /api/payments` isteği `422` ile reddedilir.
+
+**Gerekçe:** Bankacılık sistemlerinde sıralı ödeme zorunludur çünkü:
+
+1. Gecikmiş borcun öncelikli tahsil edilmesi yasal gerekliliktir.
+2. Faiz muhasebesi "en eski borcun ilk ödenmesi" varsayımıyla çalışır.
+3. Overdue takip mekanizması sıradan bağımsız düşünülemez — hangi taksitin geciktiği bilgisi ancak önceki tüm taksitler ödenmiş ise anlamlıdır.
+
+**Uygulama:**
+```csharp
+var hasEarlierUnpaid = loan.Installments.Any(i =>
+    i.InstallmentNumber < installment.InstallmentNumber &&
+    i.Status != InstallmentStatus.Paid);
+
+if (hasEarlierUnpaid)
+    throw new BusinessRuleException("Önceki ödenmemiş taksitler önce ödenmelidir.");
+```
+
+**Frontend yansıması:** Taksit planı tablosunda yalnızca en düşük numaralı ödenmemiş taksit için "Öde" butonu görünür; diğerleri "Önceki bekliyor" mesajıyla gösterilir. Bu UX kararı, backend validasyonunu kullanıcıya önceden hissettirmek için alınmıştır.
+
+---
+
+### K-20 · Ödeme Geçmişi Bonusu (CreditScoreBonus)
+
+**Karar:** Her başarılı ödeme sonrası müşterinin `CreditScoreBonus` değeri güncellenir. Zamanında ödeme +5, gecikmeli ödeme −10 bonus verir. Değer [−200, +200] aralığında kısıtlanır. Bu bonus, bir sonraki kredi değerlendirmesinde `MockCreditScoreService`'in hesapladığı baz skora eklenir.
+
+**Gerekçe:** Statik profil verisine (yaş, gelir, meslek) dayalı skor zamanla değişmez; bu da tüm müşterileri kendi profil bantlarında sabit tutar. Ödeme bonusu sayesinde:
+
+- Düzenli ödeme yapan müşteri zamanla daha iyi faiz oranı kazanabilir.
+- Ödemeleri aksatan müşterinin skoru düşer, sonraki başvurularda daha yüksek faiz veya red ile karşılaşır.
+- Bu mekanizma gerçek bankacılık sistemlerindeki kredi davranış skorlamasını (behavioral scoring) basit bir şekilde modeller.
+
+**Neden ±200 ile sınırlandı:** Baz skor maksimumu 800'dür. Bonus [−200, +200] aralığı, ödeme geçmişinin etkisini belirgin (%20) ama dominant olmayan bir seviyede tutmak için seçilmiştir. Tek başına ödeme davranışı müşteriyi Low'dan VeryHigh'a taşıyamaz; profil belirleyici olmaya devam eder.
+
+```csharp
+bool isOnTime = installment.DueDate.Date >= DateTime.UtcNow.Date;
+int delta = isOnTime ? +5 : -10;
+customer.CreditScoreBonus = Math.Clamp(customer.CreditScoreBonus + delta, -200, +200);
+```
+
+---
+
+### K-21 · Strategy Pattern — Taksit Planı Üretimi
+
+**Karar:** Taksit planı üretimi `IInstallmentPlanStrategy` interface'i arkasında iki ayrı strateji sınıfına bölündü: `StandardInstallmentStrategy` (eşit taksit) ve `BalloonPaymentStrategy` (balon ödeme).
+
+**Gerekçe:** `LoanService`, hangi stratejinin kullanılacağını `isBalloonPayment` bayrağına göre seçer; strateji implementasyonu hakkında hiçbir bilgiye sahip değildir:
+
+```csharp
+IInstallmentPlanStrategy strategy = request.IsBalloonPayment
+    ? _strategies.First(s => s.SupportsBalloon)
+    : _strategies.First(s => !s.SupportsBalloon);
+
+var installments = strategy.Generate(principal, rate, term, startDate);
+```
+
+Bu yaklaşımın avantajları:
+- Yeni bir ödeme modeli (örn. anapara ertelemeli, mevsimlik ödeme planı) eklenmesi mevcut kodu değiştirmez; yeni bir strateji sınıfı yazılır ve DI'a kaydedilir.
+- Her strateji izole birim testlerle doğrulanabilir.
+- `LoanService` sınıfı tek sorumlulukla kalır: orkestrasyonu yönetmek, hesaplamayı yapmamak.
+
+**Balon kısıtı:** `BalloonPaymentStrategy`, balon taksit tutarı anaparanın %50'sini aştığında `BusinessRuleException` fırlatır. Bu kontrol strateji içindedir, `LoanService` bilmez — Tek Sorumluluk Prensibi (SRP) bu kısıtı da içerir.
