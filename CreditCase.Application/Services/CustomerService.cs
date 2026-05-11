@@ -11,11 +11,16 @@ public class CustomerService : ICustomerService
 {
     private readonly ICustomerRepository _customerRepository;
     private readonly IValidator<CreateCustomerRequest> _createValidator;
+    private readonly IValidator<UpdateCustomerRequest> _updateValidator;
 
-    public CustomerService(ICustomerRepository customerRepository, IValidator<CreateCustomerRequest> createValidator)
+    public CustomerService(
+        ICustomerRepository customerRepository,
+        IValidator<CreateCustomerRequest> createValidator,
+        IValidator<UpdateCustomerRequest> updateValidator)
     {
         _customerRepository = customerRepository;
         _createValidator = createValidator;
+        _updateValidator = updateValidator;
     }
 
     public async Task<IEnumerable<CustomerResponse>> GetAllAsync()
@@ -60,6 +65,8 @@ public class CustomerService : ICustomerService
 
     public async Task<CustomerResponse> UpdateAsync(int id, UpdateCustomerRequest request)
     {
+        await _updateValidator.ValidateAndThrowAsync(request);
+
         var customer = await _customerRepository.GetByIdAsync(id);
         if (customer is null)
             throw new NotFoundException($"Customer with ID {id} not found.");

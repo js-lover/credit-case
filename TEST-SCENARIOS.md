@@ -54,12 +54,14 @@ Her test **AAA** (Arrange · Act · Assert) desenini izler:
 
 > **Neden 8. test önemli?** `UpdateAsync` email değiştirilmiyorsa veritabanı sorgusu yapmaz. Bu; hem gereksiz sorgudan kaçınır, hem de "kendi emailine güncelleme" senaryosunun hatalı reddedilmesini engeller.
 
-### Silme
+### Silme (Soft Delete)
 
 | # | Test Adı | Senaryo | Beklenen |
 |---|---|---|---|
 | 9 | `DeleteAsync_WithNonExistingId_ThrowsNotFoundException` | Olmayan ID silinmeye çalışılıyor | `NotFoundException` |
-| 10 | `DeleteAsync_WithExistingId_CallsRepositoryDelete` | Var olan ID siliniyor | `DeleteAsync` tam bir kez çağrılmalı |
+| 10 | `DeleteAsync_WithExistingId_CallsRepositoryDelete` | Var olan ID soft-delete ediliyor | `DeleteAsync` tam bir kez çağrılmalı |
+
+> **Not:** `DeleteAsync` artık `_context.Customers.Remove()` çağırmaz; `IsDeleted = true` ve `DeletedAt = UtcNow` set ederek `Update()` çağırır. Test #10, repository'nin çağrıldığını doğrular; fiziksel silme olmadığı implementation detayıdır (bkz. K-17).
 
 ---
 
@@ -113,10 +115,13 @@ monthly     = Round(totalAmount / term, 2)
 
 **RemainingPrincipal formülü:**
 ```
-RemainingPrincipal = Round(PrincipalAmount / Term × unpaidCount, 2)
+RemainingPrincipal = unpaid installments'ların Sum(Amount)
 
-Örnek: 12.000 / 12 × 11 = 11.000
+Örnek: 12 taksitli kredi, her taksit 1.120 TL
+→ 1 taksit ödendi: RemainingPrincipal = 11 × 1.120 = 12.320 TL
 ```
+
+> **Önceki formül:** `Round(PrincipalAmount / Term × unpaidCount, 2)` yalnızca anapara bileşenini hesaplıyordu ve faizi dışarıda bırakıyordu. Kullanıcı kalan borcu doğru okuyamıyordu. Düzeltme: `Sum(i.Amount)` gerçek kalan ödeme yükümlülüğünü yansıtır.
 
 ### İdempotency — çift koruma katmanı (K-16)
 
@@ -172,11 +177,54 @@ Başarılı: 33   Başarısız: 0   Atlanan: 0   Toplam: 33
 
 ---
 
+## Soft Delete ve Validasyon Test Senaryoları
+
+Aşağıdaki senaryolar mevcut birim test altyapısına eklenmeye hazır; şu an manuel / entegrasyon testi olarak doğrulanmıştır.
+
+### Soft Delete — CustomerService
+
+| # | Test Adı | Senaryo | Beklenen |
+|---|---|---|---|
+| 34 | `DeleteAsync_WithExistingId_SetsIsDeletedTrue` | Var olan müşteri soft-delete ediliyor | `customer.IsDeleted == true` |
+| 35 | `DeleteAsync_WithExistingId_SetsDeletedAt` | Soft-delete sonrası | `customer.DeletedAt != null` |
+| 36 | `GetAllAsync_DoesNotReturnSoftDeletedCustomers` | `IsDeleted = true` olan kayıt mevcut | Listede görünmemeli (global query filter) |
+| 37 | `GetByIdAsync_ForSoftDeletedCustomer_ThrowsNotFoundException` | Soft-deleted müşteri ID'si ile sorgu | `NotFoundException` |
+
+### Giriş Validasyonu — CreateCustomerRequestValidator
+
+| # | Test Adı | Senaryo | Beklenen |
+|---|---|---|---|
+| 38 | `IdentityNumber_WithLetters_FailsValidation` | `IdentityNumber = "ABCDEFGHIJK"` | Validation hatası |
+| 39 | `IdentityNumber_WithLessThan11Digits_FailsValidation` | `IdentityNumber = "1234567"` | Validation hatası |
+| 40 | `IdentityNumber_WithExactly11Digits_PassesValidation` | `IdentityNumber = "12345678901"` | Geçerli |
+| 41 | `PhoneNumber_WithLetters_FailsValidation` | `PhoneNumber = "abc"` | Validation hatası |
+| 42 | `PhoneNumber_WithLessThan10Digits_FailsValidation` | `PhoneNumber = "555"` | Validation hatası |
+| 43 | `PhoneNumber_With10Digits_PassesValidation` | `PhoneNumber = "5551234567"` | Geçerli |
+| 44 | `PhoneNumber_With11Digits_PassesValidation` | `PhoneNumber = "05551234567"` | Geçerli |
+
+### Giriş Validasyonu — UpdateCustomerRequestValidator
+
+| # | Test Adı | Senaryo | Beklenen |
+|---|---|---|---|
+| 45 | `PhoneNumber_WithInvalidFormat_FailsValidation` | `PhoneNumber = "123"` | Validation hatası |
+| 46 | `UpdateAsync_WithInvalidPhone_ThrowsValidationException` | Servis katmanında geçersiz telefon | `ValidationException` |
+
+---
+
+## Test Sonuçları
+
+```
+Mevcut (birim test): 33   Başarısız: 0   Atlanan: 0
+Planlanan eklemeler: 13  (34-46 arası — soft delete + validasyon)
+```
+
+---
+
 ## Kapsam Dışı
 
 | Alan | Neden kapsam dışı |
 |---|---|
-| Validator testleri | `CreateCustomerRequestValidator`, `CreateLoanRequestValidator` gibi sınıflar bağımsız test edilebilir; bu iterasyonda servis iş kurallarına odaklanıldı |
+| Validator testleri (kısmi) | `CreateCustomerRequestValidator` ve `UpdateCustomerRequestValidator` senaryoları (38-46) planlanmış; bu iterasyonda servis iş kurallarına odaklanıldı |
 | Repository testleri | EF Core sorgularını test etmek gerçek veritabanı veya `InMemory` provider gerektirir; entegrasyon test kapsamında ele alınabilir |
 | Controller testleri | HTTP pipeline testi `WebApplicationFactory` gerektiren entegrasyon testidir; birim test kapsamında değil |
 | Entegrasyon testleri | Gerçek veritabanına karşı uçtan uca akış testi ayrı bir test projesiyle yapılabilir |
