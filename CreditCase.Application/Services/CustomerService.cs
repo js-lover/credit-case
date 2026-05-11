@@ -7,6 +7,9 @@ using FluentValidation;
 
 namespace CreditCase.Application.Services;
 
+/// <summary>
+/// Müşteri iş mantığını yönetir: oluşturma, güncelleme, soft delete ve borç özeti.
+/// </summary>
 public class CustomerService : ICustomerService
 {
     private readonly ICustomerRepository _customerRepository;
@@ -37,10 +40,14 @@ public class CustomerService : ICustomerService
         return MapToResponse(customer);
     }
 
+    /// <summary>
+    /// Yeni müşteri oluşturur. TC kimlik numarası ve e-posta benzersizlik kontrolü yapar.
+    /// </summary>
     public async Task<CustomerResponse> CreateAsync(CreateCustomerRequest request)
     {
         await _createValidator.ValidateAndThrowAsync(request);
 
+        // Aynı TC kimlik numarasıyla başka aktif müşteri olup olmadığını kontrol et.
         var existing = await _customerRepository.GetByIdentityNumberAsync(request.IdentityNumber);
         if (existing is not null)
             throw new BusinessRuleException("A customer with this identity number already exists.");
@@ -63,6 +70,11 @@ public class CustomerService : ICustomerService
         return MapToResponse(created);
     }
 
+    /// <summary>
+    /// Müşteri bilgilerini günceller. E-posta değişmediyse veritabanı sorgusu yapılmaz;
+    /// bu hem performansı korur hem de müşterinin kendi e-postasını "meşgul" olarak
+    /// görmesinin önüne geçer.
+    /// </summary>
     public async Task<CustomerResponse> UpdateAsync(int id, UpdateCustomerRequest request)
     {
         await _updateValidator.ValidateAndThrowAsync(request);
@@ -71,6 +83,7 @@ public class CustomerService : ICustomerService
         if (customer is null)
             throw new NotFoundException($"Customer with ID {id} not found.");
 
+        // E-posta değişmiyorsa benzersizlik sorgusu gereksizdir ve yanlış redde yol açar.
         if (!string.Equals(customer.Email, request.Email, StringComparison.OrdinalIgnoreCase))
         {
             var existingEmail = await _customerRepository.GetByEmailAsync(request.Email);
@@ -87,6 +100,10 @@ public class CustomerService : ICustomerService
         return MapToResponse(updated);
     }
 
+    /// <summary>
+    /// Müşteriyi soft delete eder. Fiziksel silme yapılmaz; finans sektöründe
+    /// kredi/ödeme geçmişinin korunması yasal ve denetim açısından zorunludur.
+    /// </summary>
     public async Task DeleteAsync(int id)
     {
         var customer = await _customerRepository.GetByIdAsync(id);
@@ -96,8 +113,12 @@ public class CustomerService : ICustomerService
         await _customerRepository.DeleteAsync(customer);
     }
 
+    /// <summary>
+    /// Müşterinin toplam borç özetini döner: kalan anapara, bekleyen/gecikmiş/ödenen taksit sayıları.
+    /// </summary>
     public async Task<CustomerSummaryResponse> GetSummaryAsync(int id)
     {
+        // Borç hesaplaması taksit düzeyinde yapıldığı için Loans + Installments eager load gerekir.
         var customer = await _customerRepository.GetByIdWithLoansAndInstallmentsAsync(id);
         if (customer is null)
             throw new NotFoundException($"Customer with ID {id} not found.");

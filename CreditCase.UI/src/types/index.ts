@@ -1,4 +1,11 @@
+/**
+ * Uygulama genelinde kullanılan TypeScript tip tanımları.
+ * Backend API DTO'larıyla birebir eşleştirilmiştir.
+ */
+
 // ── Enum sabitleri (erasableSyntaxOnly uyumlu) ─────────────────────────────────
+// Vite, TypeScript `enum` sözdizimini desteklemez (erasableSyntaxOnly: true).
+// Bunun yerine const nesnesi + type alias kullanılır; runtime davranışı aynıdır.
 
 export const LoanType = { Personal: 0, Education: 1, Vehicle: 2 } as const;
 export type LoanType = (typeof LoanType)[keyof typeof LoanType];
@@ -24,6 +31,7 @@ export interface CustomerResponse {
   createdAt: string;
 }
 
+/** GET /api/customers/{id}/summary — müşterinin tüm kredilerine ait borç özeti */
 export interface CustomerSummaryResponse {
   customerId: number;
   fullName: string;
@@ -58,10 +66,10 @@ export interface LoanResponse {
   loanType: LoanType;
   principalAmount: number;
   interestRate: number;
-  term: number;
+  term: number;           // ay cinsinden vade
   startDate: string;
   status: LoanStatus;
-  remainingPrincipal: number;
+  remainingPrincipal: number;  // ödenmemiş taksitlerin toplamı
   installments: InstallmentResponse[];
 }
 
@@ -83,7 +91,7 @@ export interface InstallmentResponse {
   amount: number;
   dueDate: string;
   status: InstallmentStatus;
-  payment: PaymentResponse | null;
+  payment: PaymentResponse | null;  // ödeme yapılmamışsa null
 }
 
 // ── Payment ───────────────────────────────────────────────────────────────────
@@ -102,14 +110,16 @@ export interface CreatePaymentRequest {
 }
 
 // ── API Error ─────────────────────────────────────────────────────────────────
+// Backend ExceptionHandlingMiddleware tarafından üretilen standart hata formatı.
 
 export interface ApiError {
   type: string;
   message: string;
-  errors?: Record<string, string[]>;
+  errors?: Record<string, string[]>;  // 400 validasyon hatalarında alan bazlı mesajlar
 }
 
 // ── Display helpers ───────────────────────────────────────────────────────────
+// Enum değerlerinin UI'da Türkçe karşılıkları.
 
 export const LOAN_TYPE_LABELS: Record<LoanType, string> = {
   [LoanType.Personal]:  'Bireysel',

@@ -7,6 +7,9 @@ using CreditCase.Domain.Entities;
 
 namespace CreditCase.Application.Services;
 
+/// <summary>
+/// Taksit sorgulama ve durum güncelleme iş mantığını yönetir.
+/// </summary>
 public class InstallmentService : IInstallmentService
 {
     private readonly IInstallmentRepository _installmentRepository;
@@ -16,8 +19,15 @@ public class InstallmentService : IInstallmentService
         _installmentRepository = installmentRepository;
     }
 
+    /// <summary>
+    /// Tüm taksitleri döner. Her çağrıda önce vadesi geçmiş taksitler Overdue olarak
+    /// işaretlenir. Ayrı bir arka plan servisi yerine bu tetikleme yöntemi tercih edildi;
+    /// böylece görev zamanlaması ve ekstra altyapı bağımlılığından kaçınılır.
+    /// </summary>
     public async Task<IEnumerable<InstallmentResponse>> GetAllAsync()
     {
+        // Overdue güncellemesi listeleme öncesinde yapılmazsa, vadesi geçmiş taksitler
+        // hiçbir zaman Overdue durumuna geçmez.
         await _installmentRepository.UpdateOverdueAsync();
         var installments = await _installmentRepository.GetAllAsync();
         return installments.Select(MapToResponse);

@@ -5,6 +5,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CreditCase.Infrastructure.Persistence.Repositories;
 
+/// <summary>
+/// Taksit veri erişim katmanı. Overdue toplu güncelleme dahil.
+/// </summary>
 public class InstallmentRepository : IInstallmentRepository
 {
     private readonly AppDbContext _context;
@@ -13,6 +16,8 @@ public class InstallmentRepository : IInstallmentRepository
     {
         _context = context;
     }
+
+    // Ödeme bilgisi taksit sorgularında her zaman gerektiği için Payment eager load edilir.
 
     public async Task<IEnumerable<Installment>> GetAllAsync()
         => await _context.Installments
@@ -31,6 +36,11 @@ public class InstallmentRepository : IInstallmentRepository
         return installment;
     }
 
+    /// <summary>
+    /// Vadesi geçmiş ve ödenmemiş tüm taksitleri tek bir SQL UPDATE ile Overdue yapar.
+    /// <c>ExecuteUpdateAsync</c>, entity'leri belleğe yüklemeden doğrudan veritabanında
+    /// çalışır; yüksek hacimli tablolarda performans avantajı sağlar.
+    /// </summary>
     public async Task UpdateOverdueAsync()
     {
         var now = DateTime.UtcNow;

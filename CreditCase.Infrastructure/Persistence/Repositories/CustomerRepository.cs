@@ -4,6 +4,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CreditCase.Infrastructure.Persistence.Repositories;
 
+/// <summary>
+/// Müşteri veri erişim katmanı. Soft delete dahil tüm CRUD operasyonlarını uygular.
+/// </summary>
 public class CustomerRepository : ICustomerRepository
 {
     private readonly AppDbContext _context;
@@ -12,6 +15,9 @@ public class CustomerRepository : ICustomerRepository
     {
         _context = context;
     }
+
+    // EF Core global query filter (HasQueryFilter) devrede olduğundan
+    // tüm sorgular otomatik olarak WHERE IsDeleted = 0 filtresiyle çalışır.
 
     public async Task<IEnumerable<Customer>> GetAllAsync()
         => await _context.Customers.ToListAsync();
@@ -25,6 +31,10 @@ public class CustomerRepository : ICustomerRepository
     public async Task<Customer?> GetByEmailAsync(string email)
         => await _context.Customers.FirstOrDefaultAsync(c => c.Email == email);
 
+    /// <summary>
+    /// Müşteriyi kredi ve taksit detaylarıyla birlikte getirir.
+    /// Borç özeti gibi taksit düzeyinde agregasyon gerektiren senaryolarda kullanılır.
+    /// </summary>
     public async Task<Customer?> GetByIdWithLoansAndInstallmentsAsync(int id)
         => await _context.Customers
             .Include(c => c.Loans)
@@ -45,6 +55,11 @@ public class CustomerRepository : ICustomerRepository
         return customer;
     }
 
+    /// <summary>
+    /// Müşteriyi fiziksel olarak silmez; IsDeleted = true ve DeletedAt set ederek günceller.
+    /// Finans sektöründe kredi/ödeme geçmişinin korunması zorunludur.
+    /// Global query filter sayesinde bu kayıt sonraki sorgularda görünmez.
+    /// </summary>
     public async Task DeleteAsync(Customer customer)
     {
         customer.IsDeleted = true;

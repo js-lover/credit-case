@@ -3,6 +3,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CreditCase.Infrastructure.Persistence;
 
+/// <summary>
+/// Uygulama veritabanı bağlamı. Tüm entity konfigürasyonları burada merkezi olarak yönetilir.
+/// </summary>
 public class AppDbContext : DbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
@@ -26,21 +29,25 @@ public class AppDbContext : DbContext
             entity.Property(e => e.PhoneNumber).HasMaxLength(20);
             entity.Property(e => e.IsDeleted).HasDefaultValue(false);
 
-            // Filtered unique indexes: silinmiş kayıtlar kısıtın dışında tutulur.
-            // Soft-deleted bir müşterinin TC/e-postasıyla yeni kayıt açılabilmesini sağlar.
+            // Filtered unique indexes: soft-deleted kayıtlar (IsDeleted=1) benzersizlik
+            // kısıtının dışında tutulur. Bu sayede aynı TC veya e-posta ile yeni kayıt
+            // açılabilir; silinmiş müşterinin verisi DB'de kalır, yeni kayda engel olmaz.
             entity.HasIndex(e => e.IdentityNumber).IsUnique().HasFilter("[IsDeleted] = 0");
             entity.HasIndex(e => e.Email).IsUnique().HasFilter("[IsDeleted] = 0");
 
-            // Soft-delete global filtresi: tüm sorgular IsDeleted=false olanları getirir.
+            // Global query filter: EF Core tüm Customer sorgularına otomatik olarak
+            // WHERE IsDeleted = 0 ekler. Servis ve repository koduna ayrıca filtre yazmak gerekmez.
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
 
         modelBuilder.Entity<Loan>(entity =>
         {
             entity.HasKey(e => e.Id);
+            // Finansal alanlar için decimal precision zorunludur; float/double kullanılmaz.
             entity.Property(e => e.PrincipalAmount).HasPrecision(18, 2);
             entity.Property(e => e.InterestRate).HasPrecision(5, 2);
             entity.Property(e => e.RemainingPrincipal).HasPrecision(18, 2);
+            // Enum'lar DB'de okunabilir string olarak saklanır (0/1 yerine "Active"/"Closed").
             entity.Property(e => e.LoanType).HasConversion<string>();
             entity.Property(e => e.Status).HasConversion<string>();
             entity.HasOne(e => e.Customer)
@@ -65,6 +72,7 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.PaymentAmount).HasPrecision(18, 2);
             entity.Property(e => e.Status).HasConversion<string>();
+            // Bir taksite en fazla bir ödeme yapılabilir (1:1 ilişki).
             entity.HasOne(e => e.Installment)
                 .WithOne(i => i.Payment)
                 .HasForeignKey<Payment>(e => e.InstallmentId)

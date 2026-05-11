@@ -8,6 +8,10 @@ using FluentValidation;
 
 namespace CreditCase.Application.Services;
 
+/// <summary>
+/// Ödeme iş mantığını yönetir: idempotency koruması, taksit durumu güncelleme
+/// ve kalan anapara yeniden hesaplama.
+/// </summary>
 public class PaymentService : IPaymentService
 {
     private readonly IPaymentRepository _paymentRepository;
@@ -33,6 +37,9 @@ public class PaymentService : IPaymentService
         return payments.Select(MapToResponse);
     }
 
+    /// <summary>
+    /// Ödeme oluşturur ve ilgili taksit ile krediyi günceller.
+    /// </summary>
     public async Task<PaymentResponse> CreateAsync(CreatePaymentRequest request)
     {
         await _createValidator.ValidateAndThrowAsync(request);
@@ -41,9 +48,12 @@ public class PaymentService : IPaymentService
         if (installment is null)
             throw new NotFoundException($"Installment with ID {request.InstallmentId} not found.");
 
+        // Katman 1 — Taksit durum kontrolü: entity state üzerinden hızlı kontrol.
         if (installment.Status == InstallmentStatus.Paid)
             throw new BusinessRuleException("This installment has already been paid.");
 
+        // Katman 2 — Veritabanı kayıt kontrolü: taksit durumu henüz güncellenmeden servis
+        // çökmüşse oluşabilecek çift ödemeyi engeller (taksit Unpaid ama ödeme kaydı var).
         var existingPayment = await _paymentRepository.GetByInstallmentIdAsync(request.InstallmentId);
         if (existingPayment is not null)
             throw new BusinessRuleException("A payment already exists for this installment.");
@@ -64,11 +74,14 @@ public class PaymentService : IPaymentService
         var loan = await _loanRepository.GetByIdWithInstallmentsAsync(installment.LoanId);
         if (loan is not null)
         {
-            // RemainingPrincipal = sum of all installments not yet paid
+            // Kalan yükümlülük = ödenmemiş taksit tutarlarının toplamı.
+            // Önceki formül (anapara / vade × kalan taksit) faizi dışarıda bırakıyordu;
+            // bu yaklaşım gerçek kalan ödeme yükümlülüğünü yansıtır.
             loan.RemainingPrincipal = loan.Installments
                 .Where(i => i.Status != InstallmentStatus.Paid)
                 .Sum(i => i.Amount);
 
+            // Tüm taksitler ödenince kredi kapanır.
             if (loan.RemainingPrincipal == 0)
                 loan.Status = LoanStatus.Closed;
 
