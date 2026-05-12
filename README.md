@@ -13,7 +13,7 @@ Bireysel müşterilerin kredi başvurularını, kredi bakiyelerini ve geri ödem
 5. [ER Diyagramı](#er-diyagramı)
 6. [İş Kuralları](#iş-kuralları)
 7. [Kredi Değerlendirme Motoru](#kredi-değerlendirme-motoru)
-8. [Faiz Oranı Belirleme](#faiz-oranı-belirleme)
+8. [Vade Oranı Belirleme](#vade-oranı-belirleme)
 9. [Taksit Hesaplama](#taksit-hesaplama)
 10. [Sıralı Ödeme Kuralı](#sıralı-ödeme-kuralı)
 11. [Balon Ödeme](#balon-ödeme)
@@ -23,6 +23,7 @@ Bireysel müşterilerin kredi başvurularını, kredi bakiyelerini ve geri ödem
 15. [Hata Yönetimi](#hata-yönetimi)
 16. [Üçüncü Parti Servis Entegrasyonu](#üçüncü-parti-servis-entegrasyonu)
 17. [Kurulum ve Çalıştırma](#kurulum-ve-çalıştırma)
+    > **Mock servislerin detaylı açıklaması için:** [`MockServices.md`](./MockServices.md)
 18. [Geliştirme Adımları](#geliştirme-adımları)
 19. [Yapay Zeka Kullanımı](#yapay-zeka-kullanımı)
 
@@ -113,6 +114,8 @@ CreditCase.sln
 │   │   ├── InstallmentStatus.cs
 │   │   ├── PaymentStatus.cs
 │   │   ├── RiskCategory.cs
+│   │   ├── ScoreCategory.cs         # 5 kategori: Kritik/GelisimeAcik/Dengeli/Guvenli/Prestijli
+│   │   ├── ScoreCategoryHelper.cs   # Kategori → çarpan, vade limiti, min. taksit, risk eşleşmesi
 │   │   ├── ProfessionCategory.cs
 │   │   └── EmploymentStatus.cs
 │   └── Interfaces/
@@ -156,11 +159,11 @@ CreditCase.sln
 │   │       ├── PaymentRepository.cs
 │   │       └── LoanEvaluationRepository.cs
 │   ├── Services/
-│   │   ├── MockCreditScoreService.cs        # Profil tabanlı skor hesaplama
+│   │   ├── MockCreditScoreService.cs        # Profil tabanlı skor hesaplama (0-1900)
 │   │   ├── RiskAnalysisEngine.cs            # Ağırlıklı kural motoru
-│   │   ├── InterestCalculationEngine.cs     # Dinamik faiz oranı
-│   │   ├── MaximumLoanCalculator.cs         # Borç kapasitesi hesabı
-│   │   ├── StandardInstallmentStrategy.cs   # Düz faizli eşit taksit
+│   │   ├── InterestCalculationEngine.cs     # Dinamik vade oranı (ratio, not %)
+│   │   ├── MaximumLoanCalculator.cs         # ScoreCategory × gelir çarpanı
+│   │   ├── StandardInstallmentStrategy.cs   # Amortisasyon yöntemi eşit taksit
 │   │   ├── BalloonPaymentStrategy.cs        # Balon ödeme planı
 │   │   └── Rules/
 │   │       ├── CreditScoreRule.cs           # Ağırlık: 0.30
@@ -171,7 +174,8 @@ CreditCase.sln
 │   ├── Migrations/
 │   │   ├── 20260511000000_InitialCreate.cs
 │   │   ├── 20260511000002_AddSoftDeleteToCustomer.cs
-│   │   └── 20260512000001_AddCreditScoreBonusToCustomer.cs
+│   │   ├── 20260512000001_AddCreditScoreBonusToCustomer.cs
+│   │   └── 20260512000002_RenameInterestRateToRateAmount.cs
 │   └── DependencyInjection.cs
 │
 ├── CreditCase.Api/
@@ -238,7 +242,7 @@ Müşteriye verilen krediyi temsil eder.
 | CustomerId | int | Bağlı müşteri (FK) |
 | LoanType | enum | Bireysel / Eğitim / Taşıt |
 | PrincipalAmount | decimal(18,2) | Ana para tutarı |
-| InterestRate | decimal(5,2) | Yıllık faiz oranı (%) — InterestCalculationEngine tarafından belirlenir |
+| RateAmount | decimal(7,4) | Vade oranı (ratio, yüzde değil) — InterestCalculationEngine tarafından belirlenir |
 | Term | int | Vade (ay) |
 | StartDate | DateTime | Kredi başlangıç tarihi |
 | Status | enum | Aktif / Kapalı |
@@ -283,14 +287,15 @@ Kredi başvurusu değerlendirme kaydını temsil eder.
 | IsApproved | bool | Onay kararı |
 | ApprovedAmount | decimal(18,2) | Onaylanan tutar |
 | MaximumAmount | decimal(18,2) | Hesaplanan maksimum uygun tutar |
-| ApprovedInterestRate | decimal(5,2) | Hesaplanan faiz oranı |
+| ApprovedRateAmount | decimal(7,4) | Hesaplanan vade oranı (ratio) |
 | RiskLevel | enum | Low / Medium / High / VeryHigh |
-| CreditScore | int | Değerlendirme anındaki kredi skoru |
+| CreditScore | int | Değerlendirme anındaki kredi skoru (0–1900) |
+| CreditScoreCategory | enum | Kritik / GelisimeAcik / Dengeli / Guvenli / Prestijli |
 | DebtToIncomeRatio | decimal | Borç / Gelir oranı |
 | MonthlyInstallmentEstimate | decimal(18,2) | Tahmini aylık taksit |
 | RejectionReason | string? | Red sebebi (yalnızca reddedilen başvurularda) |
 | EvaluationDate | DateTime | Değerlendirme tarihi |
-| ExpirationDate | DateTime | Onay geçerlilik tarihi (30 gün) |
+| ExpirationDate | DateTime | Onay geçerlilik tarihi (7 gün) |
 
 ---
 
@@ -319,7 +324,7 @@ erDiagram
         int CustomerId FK
         string LoanType
         decimal PrincipalAmount
-        decimal InterestRate
+        decimal RateAmount
         int Term
         datetime StartDate
         string Status
@@ -349,7 +354,7 @@ erDiagram
         bool IsApproved
         decimal ApprovedAmount
         decimal MaximumAmount
-        decimal ApprovedInterestRate
+        decimal ApprovedRateAmount
         string RiskLevel
         int CreditScore
         decimal DebtToIncomeRatio
@@ -385,14 +390,8 @@ erDiagram
 - Kredi oluşturulmadan önce `LoanEvaluationService` üzerinden risk ve uygunluk analizi yapılır.
 - Değerlendirme `Approved` değilse kredi reddedilir.
 - Kredi kaydedilirken taksit planı **otomatik olarak** üretilir; ayrı bir endpoint çağrısı gerekmez.
-- **Tutar-Vade Kısıtı:** Küçük tutarlı kredilere uzun vadeler açık değildir.
-
-| Kredi Tutarı | Maks. Vade |
-|---|---|
-| ≤ 10.000 ₺ | 24 ay |
-| ≤ 50.000 ₺ | 60 ay |
-| ≤ 150.000 ₺ | 84 ay |
-| > 150.000 ₺ | 120 ay |
+- **Vade Kısıtı:** Desteklenen vadeler `[6, 12, 18, 24, 36, 48, 60, 72]` aydır; diğer değerler 400 döner.
+- **Kategori Bazlı Vade Sınırı:** Müşterinin `ScoreCategory`'si her kategorinin maksimum vadesini belirler (Kritik=24 ay, Prestijli=72 ay). İstenen vade bu sınırı aşarsa sistem otomatik olarak en yakın sınıra çeker.
 
 ### Taksit Yönetimi
 - Her taksit, vade tarihi (`DueDate`) taşır.
@@ -424,7 +423,7 @@ Toplam Puan = Σ (Kural[i].Evaluate() × Kural[i].Weight)
 
 | Kural | Ağırlık | Puan Kaynağı |
 |---|---|---|
-| `CreditScoreRule` | 0.30 | Kredi skoru 0-1000 → 0-100 normalize |
+| `CreditScoreRule` | 0.30 | Kredi skoru 0-1900 → 0-100 normalize |
 | `DebtToIncomeRule` | 0.25 | Borç/Gelir oranı bantları |
 | `ProfessionStabilityRule` | 0.20 | Meslek kategorisine göre stabilite |
 | `AgeRule` | 0.15 | Yaş bantları (36-50 = 100 puan) |
@@ -469,103 +468,95 @@ flowchart LR
 
 ### Maksimum Kredi Tutarı
 
+Maksimum tutar, müşterinin `ScoreCategory`'sine göre belirlenen gelir çarpanı ile hesaplanır:
+
+| ScoreCategory | Gelir Çarpanı | Maks. Vade | Min. Taksit |
+|---|---|---|---|
+| Kritik | Kredi verilmez (0×) | 24 ay | — |
+| GelisimeAcik | 3× | 36 ay | 25.000 ₺ |
+| Dengeli | 10× | 48 ay | 15.000 ₺ |
+| Guvenli | 15× | 60 ay | 10.000 ₺ |
+| Prestijli | 20× | 72 ay | 5.000 ₺ |
+
 ```
 BorçKapasitesi   = (AylıkGelir × 0.70) − MevcutAylıkBorçÖdemesi
-KapasiteBazlıMax = BorçKapasitesi × VadeAy
-GelirBazlıMax    = AylıkGelir × RiskKatsayısı   (Low=5.0x, Medium=3.5x, High=2.0x)
+KapasiteBazlıMax = BorçKapasitesi × EfektifVade
+GelirBazlıMax    = AylıkGelir × Çarpan
 MaksimumTutar    = Min(GelirBazlıMax, KapasiteBazlıMax, 1.000.000 ₺)
 ```
 
 ---
 
-## Faiz Oranı Belirleme
+## Vade Oranı Belirleme
 
-Faiz oranı, `InterestCalculationEngine` tarafından 4 değişkenden dinamik olarak hesaplanır. Bu rate, daha sonra taksit planı üretiminde kullanılır.
+Vade oranı, `InterestCalculationEngine` tarafından 3 aşamada dinamik olarak hesaplanır. Sonuç **ratio formatındadır** (örn. `3.25`, `4.48`) — yüzde değildir, UI'de `%` kullanılmaz. Detaylı açıklama için bkz. [`MockServices.md`](./MockServices.md).
 
 ### Formül
 
 ```
-Son Faiz Oranı = Temel (%5) + Risk Primi + Vade Primi + Tutar Primi − Meslek Bonusu
+Son Vade Oranı = TemelOran × (1 + VadeFactörü) ± MeslekBonusu
 ```
 
-### Bileşenler
+### Aşama 1 — Temel Vade Oranı (LoanType × ScoreCategory, 12 ay referans)
 
-**Risk Primi:**
+| | Kritik | GelisimeAcik | Dengeli | Guvenli | Prestijli |
+|---|---|---|---|---|---|
+| **Bireysel** | 6.8 | 5.2 | 4.0 | 3.0 | 2.0 |
+| **Taşıt** | 5.8 | 4.2 | 3.0 | 2.0 | 1.2 |
+| **Eğitim** | 5.2 | 3.8 | 2.7 | 1.7 | 0.9 |
 
-| Risk Kategorisi | Prim |
+### Aşama 2 — Vade Faktörü
+
+| Vade | Faktör |
 |---|---|
-| Düşük | +%0 |
-| Orta | +%5 |
-| Yüksek | +%12 |
+| ≤ 6 ay | −0.25 (indirim) |
+| ≤ 12 ay | 0.00 (referans) |
+| ≤ 18 ay | +0.08 |
+| ≤ 24 ay | +0.15 |
+| ≤ 36 ay | +0.28 |
+| ≤ 48 ay | +0.42 |
+| ≤ 60 ay | +0.58 |
+| ≤ 72 ay | +0.75 |
 
-**Vade Primi** (uzun vadede belirsizlik artar):
+### Aşama 3 — Meslek Bonusu / Penaltısı
 
-| Vade | Prim |
+| Meslek | Etki |
 |---|---|
-| 1–6 ay | +%0 |
-| 7–12 ay | +%3 |
-| 13–24 ay | +%7 |
-| 25–36 ay | +%12 |
-| 37–60 ay | +%18 |
-| 61–84 ay | +%25 |
-| 85–120 ay | +%35 |
-
-**Tutar Primi** (gelire oranla istenen tutar):
-
-| İstenen Tutar / Aylık Gelir | Prim |
-|---|---|
-| ≤ 2× | +%0 |
-| 2×–3× | +%1 |
-| > 3× | +%2 |
-
-**Meslek Bonusu:**
-
-| Meslek | Bonus |
-|---|---|
-| Kamu (Government) | −%1 |
-| Diğer | %0 |
+| Kamu | −0.30 |
+| Sağlık, Teknoloji | −0.20 |
+| Eğitim | −0.15 |
+| Finans | −0.10 |
+| Ticaret, İnşaat | +0.20 |
+| Mevsimlik | +0.30 |
+| Serbest Meslek (EmploymentStatus) | min. +0.30 |
 
 ### Örnek Hesaplamalar
 
-**Senaryo A — Düşük Riskli, Kısa Vadeli:**
+**Senaryo A — Güvenli Kategorisi, Yazılımcı, 24 ay:**
 ```
-Yazılımcı, 38 yaş, 12.000 ₺/ay gelir | İstek: 20.000 ₺, 12 ay
-Risk Puanı: 78 → Low  →  Risk Primi: +%0
-Vade Primi (12 ay): +%3
-Tutar Primi (20.000 / 12.000 = 1.67×): +%0
-Meslek Bonusu: %0
-Son Faiz: %5 + 0 + 3 + 0 = %8
-```
-
-**Senaryo B — Orta Riskli, Uzun Vadeli:**
-```
-Satış Temsilcisi, 28 yaş, 5.000 ₺/ay gelir | İstek: 18.000 ₺, 36 ay
-Risk Puanı: 61 → Medium  →  Risk Primi: +%5
-Vade Primi (36 ay): +%12
-Tutar Primi (18.000 / 5.000 = 3.6×): +%2
-Meslek Bonusu: %0
-Son Faiz: %5 + 5 + 12 + 2 = %24
+Kredi Skoru: 1550 → Guvenli
+Temel Oran (Bireysel, Guvenli): 3.0
+Vade Faktörü (24 ay): +0.15  →  3.0 × 1.15 = 3.45
+Meslek Bonusu (Teknoloji): −0.20
+Son Vade Oranı = 3.45 − 0.20 = 3.25
 ```
 
-**Senaryo C — Kamu Çalışanı Bonusu:**
+**Senaryo B — Dengeli Kategorisi, Satış, 36 ay:**
 ```
-Devlet memuru, 45 yaş, 8.000 ₺/ay gelir | İstek: 30.000 ₺, 24 ay
-Risk Puanı: 82 → Low  →  Risk Primi: +%0
-Vade Primi (24 ay): +%7
-Tutar Primi (30.000 / 8.000 = 3.75×): +%2
-Meslek Bonusu: −%1
-Son Faiz: %5 + 0 + 7 + 2 − 1 = %13
+Kredi Skoru: 1200 → Dengeli
+Temel Oran (Bireysel, Dengeli): 4.0
+Vade Faktörü (36 ay): +0.28  →  4.0 × 1.28 = 5.12
+Meslek Bonusu (Ticaret): +0.20
+Son Vade Oranı = 5.12 + 0.20 = 5.32
 ```
 
 ```mermaid
 flowchart TD
-    START([Kredi Başvurusu]) --> RISK[Risk Analizi\nRiskAnalysisEngine]
-    RISK --> BASE["Temel Faiz: %5"]
-    BASE --> RP["+ Risk Primi\nLow=0% · Med=+5% · High=+12%"]
-    RP --> VP["+ Vade Primi\n1-6ay: 0% ... 85+ay: +35%"]
-    VP --> TP["+ Tutar Primi\n≤2x: 0% · 2-3x: +1% · >3x: +2%"]
-    TP --> MB["− Meslek Bonusu\nKamu: −1% · Diğer: 0%"]
-    MB --> RATE(["Son Faiz Oranı\n%5 – %52 aralığı"])
+    START([Kredi Başvurusu]) --> CAT["ScoreCategory\nKritik / Dengeli / Guvenli ..."]
+    CAT --> BASE["Temel Vade Oranı\nLoanType × ScoreCategory\n(12 ay referans tablosu)"]
+    BASE --> TF["× (1 + VadeFactörü)\n≤6ay: −0.25 · 12ay: 0 · 72ay: +0.75"]
+    TF --> MB["± Meslek Bonusu\nKamu: −0.30 · Mevsimlik: +0.30"]
+    MB --> RATE(["Son Vade Oranı\n(ratio: 0.9 – 8.0 arası)"])
 
     style START fill:#dbeafe,color:#1e3a8a
     style RATE fill:#d1fae5,color:#064e3b
@@ -579,21 +570,27 @@ Faiz oranı belirlendikten sonra taksit planı iki strateji sınıfından biri i
 
 ### Standart Plan — `StandardInstallmentStrategy`
 
-Düz faiz (flat-rate) yöntemiyle eşit tutarlı taksit planı üretir:
+**Amortisasyon (azalan bakiye) yöntemiyle** eşit tutarlı taksit planı üretir:
 
 ```
-termYears     = Term / 12
-totalAmount   = PrincipalAmount × (1 + InterestRate / 100 × termYears)
-monthlyAmount = ROUND(totalAmount / Term, 2)
+r = rateAmount / 100 / 12   (yıllık ratio → aylık oran)
+A = P × r(1+r)^n / [(1+r)^n − 1]
+
+P = Anapara
+r = Aylık oran
+n = Vade (ay)
+A = Aylık taksit tutarı
 ```
 
 **Örnek:**
 ```
-Ana Para: 20.000 ₺ · Faiz: %8 · Vade: 12 ay
+Ana Para: 50.000 ₺ · Vade Oranı: 3.30 · Vade: 24 ay
 
-termYears    = 12 / 12 = 1
-totalAmount  = 20.000 × (1 + 0.08 × 1) = 21.600 ₺
-monthlyAmount = 21.600 / 12 = 1.800 ₺/ay  (tüm taksitler eşit)
+r = 3.30 / 100 / 12 = 0.00275
+A = 50.000 × 0.00275 × (1.00275)^24 / [(1.00275)^24 − 1]
+A ≈ 2.151 ₺/ay  (tüm taksitler eşit)
+
+Toplam Ödeme ≈ 51.624 ₺  (ek ödeme: ~1.624 ₺)
 ```
 
 `RemainingPrincipal`, her başarılı ödemede ödenmemiş taksit tutarlarının toplamıyla güncellenir:
@@ -603,12 +600,11 @@ RemainingPrincipal = SUM(ödenmemiş taksitlerin Amount değerleri)
 
 ### Balon Ödeme Planı — `BalloonPaymentStrategy`
 
-İlk `n-1` taksit normal tutarın **%60**'ı kadar düşük tutulur; son taksit (balon) kalan borcun tamamını kapsar:
+Standart amortisasyon tutarının **%60**'ı kadar düşük ilk taksitler; kalan tüm borç son taksite (balon) yansıtılır:
 
 ```
-normalMonthly  = totalAmount / term
-regularAmount  = ROUND(normalMonthly × 0.60, 2)
-balloonAmount  = ROUND(totalAmount − regularAmount × (term − 1), 2)
+regularAmount = ROUND(standardMonthlyAmount × 0.60, 2)
+balloonAmount = ROUND(totalPayable − regularAmount × (term − 1), 2)
 ```
 
 **Kısıt:** `balloonAmount ≤ principalAmount × 0.50` (anaparanın %50'sini aşamaz).
@@ -692,11 +688,11 @@ Müşteri profili ve ödeme geçmişi, kredi skorunu birlikte belirler.
 
 ```mermaid
 flowchart TD
-    subgraph "MockCreditScoreService — Baz Skor (maks. 800)"
-        AG["Yaş Puanı\nmaks. 200"]
-        INC["Gelir Puanı\nmaks. 250"]
-        EMP["İstihdam Puanı\nmaks. 200"]
-        PROF["Meslek Puanı\nmaks. 150"]
+    subgraph "MockCreditScoreService — Baz Skor (maks. 1700)"
+        AG["Yaş Puanı\nmaks. 400"]
+        INC["Gelir Puanı\nmaks. 550"]
+        EMP["İstihdam Puanı\nmaks. 400"]
+        PROF["Meslek Puanı\nmaks. 350"]
         BASE_SUM["Baz Skor"]
     end
 
@@ -714,65 +710,68 @@ flowchart TD
     PAY_ON --> BONUS
     PAY_LATE --> BONUS
 
-    BASE_SUM --> CLAMP["Nihai Skor = Clamp(Baz + Bonus, 0, 1000)"]
+    BASE_SUM --> CLAMP["Nihai Skor = Clamp(Baz + Bonus, 0, 1900)"]
     BONUS --> CLAMP
 
-    CLAMP -->|"≥ 750"| LOW_IND["Low Risk\nNegative Records: yok"]
-    CLAMP -->|"600–749"| MED_IND["Medium Risk\nNegative Records: yok"]
-    CLAMP -->|"< 600"| HIGH_IND["High Risk\nNegative Records: ödeme gecikmesi"]
+    CLAMP -->|"≥ 1720"| CAT1["Prestijli\nDefaultProb: 0.02"]
+    CLAMP -->|"1470–1719"| CAT2["Guvenli\nDefaultProb: 0.05"]
+    CLAMP -->|"1150–1469"| CAT3["Dengeli\nDefaultProb: 0.12"]
+    CLAMP -->|"970–1149"| CAT4["GelisimeAcik\nDefaultProb: 0.25"]
+    CLAMP -->|"< 970"| CAT5["Kritik\nDefaultProb: 0.45"]
 
     style LOW_IND fill:#86efac,color:#14532d
     style MED_IND fill:#fde68a,color:#78350f
     style HIGH_IND fill:#fecaca,color:#991b1b
 ```
 
-### Baz Skor Bileşenleri
+### Baz Skor Bileşenleri (toplam maks. 1700)
 
-**Yaş Puanı (maks. 200):**
+**Yaş Puanı (maks. 400):**
 
 | Yaş | Puan |
 |---|---|
-| < 21 | 40 |
-| 21–25 | 100 |
-| 26–35 | 160 |
-| 36–50 | 200 (pik) |
-| 51–60 | 175 |
-| 61–65 | 120 |
-| > 65 | 55 |
+| < 21 | 80 |
+| 21–25 | 200 |
+| 26–35 | 320 |
+| 36–50 | 400 (pik) |
+| 51–60 | 350 |
+| 61–65 | 240 |
+| > 65 | 110 |
 
-**Gelir Puanı (maks. 250):**
+**Gelir Puanı (maks. 550):**
 
 | Aylık Gelir | Puan |
 |---|---|
-| < 3.000 ₺ | 30 |
-| 3.000–5.999 ₺ | 85 |
-| 6.000–9.999 ₺ | 145 |
-| 10.000–19.999 ₺ | 205 |
-| 20.000–49.999 ₺ | 240 |
-| ≥ 50.000 ₺ | 250 |
+| < 3.000 ₺ | 60 |
+| 3.000–5.999 ₺ | 170 |
+| 6.000–9.999 ₺ | 290 |
+| 10.000–19.999 ₺ | 410 |
+| 20.000–49.999 ₺ | 495 |
+| ≥ 50.000 ₺ | 550 |
 
-**İstihdam Puanı (maks. 200):**
+**İstihdam Puanı (maks. 400):**
 
 | Durum | Puan |
 |---|---|
-| Tam Zamanlı | 200 |
-| Emekli | 170 |
-| Serbest Meslek | 130 |
-| Yarı Zamanlı | 100 |
-| İşsiz | 20 |
+| Tam Zamanlı | 400 |
+| Emekli | 340 |
+| Serbest Meslek | 260 |
+| Yarı Zamanlı | 200 |
+| İşsiz | 40 |
 
-**Meslek Puanı (maks. 150):**
+**Meslek Puanı (maks. 350):**
 
 | Meslek | Puan |
 |---|---|
-| Kamu | 150 |
-| Sağlık | 140 |
-| Finans | 135 |
-| Eğitim / Teknoloji | 130 |
-| Ticaret / Hizmetler | 90–100 |
-| Diğer | 80 |
-| İnşaat | 70 |
-| Mevsimlik | 45 |
+| Kamu | 350 |
+| Sağlık | 315 |
+| Finans | 295 |
+| Eğitim / Teknoloji | 280 |
+| Ticaret | 220 |
+| Hizmetler | 195 |
+| Diğer | 175 |
+| İnşaat | 150 |
+| Mevsimlik | 90 |
 
 ### Ödeme Geçmişi Bonusu
 
@@ -780,8 +779,9 @@ Her başarılı ödeme sonrası `CreditScoreBonus` güncellenir ve `Customer` ta
 
 ```csharp
 bool isOnTime = installment.DueDate.Date >= DateTime.UtcNow.Date;
-int delta = isOnTime ? +5 : -10;
+int delta     = isOnTime ? +5 : -10;
 customer.CreditScoreBonus = Math.Clamp(customer.CreditScoreBonus + delta, -200, +200);
+// Nihai skor = Math.Clamp(baseScore + CreditScoreBonus, 0, 1900)
 ```
 
 Düzenli ödeme yapan bir müşteri zaman içinde kredi skorunu artırabilir; bu da sonraki başvurularda daha iyi faiz oranına yol açar.
@@ -800,14 +800,14 @@ flowchart TD
     D --> E["RiskAnalysisEngine\nΣ (kural × ağırlık)"]
     E --> F{Risk Kategorisi?}
     F -->|VeryHigh| ERR3([422 Reddedildi])
-    F -->|Low/Medium/High| G["InterestCalculationEngine\nBaz + Risk + Vade + Tutar − Meslek"]
-    G --> H["MaximumLoanCalculator\nBorç kapasitesi hesabı"]
-    H --> I["LoanEvaluationResult kaydedilir\n(30 gün geçerli)"]
+    F -->|Low/Medium/High| G["InterestCalculationEngine\nBaseRate × TermFactor ± MeslekBonusu"]
+    G --> H["MaximumLoanCalculator\nScoreCategory × Gelir çarpanı"]
+    H --> I["LoanEvaluationResult kaydedilir\n(7 gün geçerli)"]
     I --> J([200 LoanEvaluationResponse])
 
     J -.->|Onaylı değerlendirme ile| K
 
-    K([POST /api/loans]) --> L["FluentValidation\nTutar-Vade kısıtı kontrolü"]
+    K([POST /api/loans]) --> L["FluentValidation\nVade [6-72 ay] kontrolü"]
     L -->|Geçersiz| ERR4([400 Bad Request])
     L -->|Geçerli| M{isBalloonPayment?}
     M -->|true| N[BalloonPaymentStrategy\nDüşük taksit + yüksek son]
@@ -952,8 +952,8 @@ public interface ICreditScoreService
 
 public record CreditScoreResult(
     int CustomerId,
-    int CreditScore,              // 0-1000
-    string RiskIndicator,         // "Low" | "Medium" | "High"
+    int CreditScore,              // 0-1900
+    string RiskIndicator,         // "Low" | "Medium" | "High" | "VeryHigh"
     IReadOnlyList<NegativeRecord> NegativeRecords,
     decimal DefaultProbability,   // 0.0-1.0
     DateTime QueryDate
@@ -967,14 +967,14 @@ public record CreditScoreResult(
 ```mermaid
 flowchart LR
     CUST[("Customer\n(DB)")]
-    AGE["ScoreAge\nDoğum tarihi → yaş\nmaks. 200"]
-    INC["ScoreIncome\nAylık gelir bantları\nmaks. 250"]
-    EMP["ScoreEmployment\nİstihdam durumu\nmaks. 200"]
-    PROF["ScoreProfession\nMeslek kategorisi\nmaks. 150"]
+    AGE["ScoreAge\nDoğum tarihi → yaş\nmaks. 400"]
+    INC["ScoreIncome\nAylık gelir bantları\nmaks. 550"]
+    EMP["ScoreEmployment\nİstihdam durumu\nmaks. 400"]
+    PROF["ScoreProfession\nMeslek kategorisi\nmaks. 350"]
     BONUS["CreditScoreBonus\nÖdeme geçmişi\n−200 / +200"]
 
-    SUM["Baz Skor\n(maks. 800)"]
-    FINAL["Clamp(Baz + Bonus, 0, 1000)\nNihai Skor"]
+    SUM["Baz Skor\n(maks. 1700)"]
+    FINAL["Clamp(Baz + Bonus, 0, 1900)\nNihai Skor"]
 
     CUST --> AGE
     CUST --> INC
@@ -991,11 +991,11 @@ flowchart LR
     BONUS --> FINAL
 ```
 
-**Mock servis yanıtı (örnek — 780 skorlu müşteri):**
+**Mock servis yanıtı (örnek — 1550 skorlu, Güvenli kategorisi müşteri):**
 ```json
 {
   "customerId": 3,
-  "creditScore": 780,
+  "creditScore": 1550,
   "riskIndicator": "Low",
   "negativeRecords": [],
   "defaultProbability": 0.05,
@@ -1003,11 +1003,11 @@ flowchart LR
 }
 ```
 
-**Mock servis yanıtı (örnek — 520 skorlu müşteri):**
+**Mock servis yanıtı (örnek — 980 skorlu, Gelişime Açık kategorisi müşteri):**
 ```json
 {
   "customerId": 7,
-  "creditScore": 520,
+  "creditScore": 980,
   "riskIndicator": "High",
   "negativeRecords": [
     {
@@ -1016,7 +1016,7 @@ flowchart LR
       "amount": 1200.00
     }
   ],
-  "defaultProbability": 0.35,
+  "defaultProbability": 0.25,
   "queryDate": "2026-05-12T10:00:00Z"
 }
 ```

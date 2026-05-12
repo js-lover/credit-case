@@ -75,28 +75,28 @@ Her test **AAA** (Arrange · Act · Assert) desenini izler:
 | # | Test Adı | Senaryo | Beklenen |
 |---|---|---|---|
 | 11 | `CreateAsync_WithTwelveMonthTerm_GeneratesTwelveInstallments` | 12 aylık kredi | 12 taksit üretilmeli |
-| 12 | `CreateAsync_FlatRateInterest_CalculatesCorrectMonthlyAmount` | 12.000 TL · %12 · 12 ay | Aylık taksit = **1.120,00 TL** |
-| 13 | `CreateAsync_FlatRateInterest_SixMonthTerm_CalculatesCorrectMonthlyAmount` | 6.000 TL · %10 · 6 ay | Aylık taksit = **1.050,00 TL** |
-| 14 | `CreateAsync_AllGeneratedInstallments_HaveUnpaidStatus` | Yeni oluşturulan kredi | Tüm taksitler `Unpaid` başlamalı |
-| 15 | `CreateAsync_GeneratedInstallments_DueDatesIncrementMonthly` | 3 aylık kredi, 1 Ocak başlangıç | Vadeler Şubat · Mart · Nisan |
-| 16 | `CreateAsync_NewLoan_RemainingPrincipalEqualsFullPrincipal` | Yeni kredi oluşturuldu | `RemainingPrincipal = PrincipalAmount` |
+| 12 | `CreateAsync_CalculatesMonthlyAmountUsingServerRateAmount` | Amortisasyon formülü | Mock strateji beklenen tutarı üretmeli |
+| 13 | `CreateAsync_AllGeneratedInstallments_HaveUnpaidStatus` | Yeni oluşturulan kredi | Tüm taksitler `Unpaid` başlamalı |
+| 14 | `CreateAsync_GeneratedInstallments_DueDatesIncrementMonthly` | 3 aylık kredi, 1 Ocak başlangıç | Vadeler Şubat · Mart · Nisan |
+| 15 | `CreateAsync_NewLoan_RemainingPrincipalEqualsFullPrincipal` | Yeni kredi oluşturuldu | `RemainingPrincipal = PrincipalAmount` |
 
-**Faiz formülü doğrulama:**
+**Amortisasyon formülü:**
 ```
-totalAmount = principal × (1 + rate/100 × termYears)
-monthly     = Round(totalAmount / term, 2)
+r = rateAmount / 100 / 12
+A = P × r(1+r)^n / [(1+r)^n − 1]
 
-Örnek 1: 12.000 × (1 + 0,12 × 1,0) / 12 = 1.120,00
-Örnek 2:  6.000 × (1 + 0,10 × 0,5) /  6 = 1.050,00
+Örnek: 50.000 ₺, vade oranı 3.25, 24 ay
+r = 3.25 / 100 / 12 ≈ 0.002708
+A ≈ 2.198 ₺/ay
 ```
 
 ### Hata senaryoları
 
 | # | Test Adı | Senaryo | Beklenen |
 |---|---|---|---|
-| 17 | `CreateAsync_WithNonExistingCustomer_ThrowsNotFoundException` | CustomerId veritabanında yok | `NotFoundException` |
-| 18 | `CreateAsync_WithRejectedCreditScore_ThrowsBusinessRuleException` | Mock kredi skoru servisi "Rejected" döndürüyor | `BusinessRuleException` |
-| 19 | `GetByIdAsync_WithNonExistingId_ThrowsNotFoundException` | Olmayan kredi ID'si sorgulanıyor | `NotFoundException` |
+| 16 | `CreateAsync_WithNonExistingCustomer_ThrowsNotFoundException` | CustomerId veritabanında yok | `NotFoundException` |
+| 17 | `CreateAsync_WithRejectedCreditScore_ThrowsBusinessRuleException` | Mock kredi skoru servisi Kritik kategori (red) döndürüyor | `BusinessRuleException` |
+| 18 | `GetByIdAsync_WithNonExistingId_ThrowsNotFoundException` | Olmayan kredi ID'si sorgulanıyor | `NotFoundException` |
 
 ---
 
@@ -197,7 +197,7 @@ Başarılı: 48   Başarısız: 0   Atlanan: 0   Toplam: 48
 
 ## Soft Delete ve Validasyon Test Senaryoları
 
-Aşağıdaki senaryolar mevcut birim test altyapısına eklenmeye hazır; şu an manuel / entegrasyon testi olarak doğrulanmıştır.
+Aşağıdaki senaryolar birim test paketine dahildir ve 48 testin içinde yer almaktadır.
 
 ### Soft Delete — CustomerService
 

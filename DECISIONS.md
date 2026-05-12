@@ -57,35 +57,33 @@ Her karar için şu soruyu yanıtlar: **"Bu neden böyle yapıldı / yapılmadı
 
 ---
 
-### K-06 · Faiz sistemi: dinamik oran belirleme + düz faizli taksit hesaplama
+### K-06 · Vade oranı sistemi: ratio formatı + amortisasyon taksit hesaplama
 
-Bu sistem iki bağımsız bileşenden oluşur; sıkça karıştırılan bu iki kavram birbirinden ayrı ele alınmıştır.
+Bu sistem iki bağımsız bileşenden oluşur.
 
-**Bileşen 1 — Faiz Oranı Belirleme (`InterestCalculationEngine`):**
+**Bileşen 1 — Vade Oranı Belirleme (`InterestCalculationEngine`):**
 
-Faiz oranı statik değildir; her başvuru için 4 değişkenden dinamik olarak hesaplanır:
+Vade oranı **ratio formatındadır** (örn. `3.25`, `4.48`) — yüzde değildir. Her başvuru için 3 aşamada hesaplanır:
 
 ```
-Son Faiz = %5 (taban) + Risk Primi + Vade Primi + Tutar Primi − Meslek Bonusu
+Son Vade Oranı = TemelOran[LoanType][ScoreCategory] × (1 + VadeFactörü) ± MeslekBonusu
 
-Risk Primi  : Low=0%, Medium=+5%, High=+12%
-Vade Primi  : ≤6ay=0%, 7-12=+3%, 13-24=+7%, 25-36=+12%, 37-60=+18%, 61-84=+25%, 85+=+35%
-Tutar Primi : ≤2x gelir=0%, 2-3x=+1%, >3x=+2%
-Meslek Bonusu: Kamu=−1%
+TemelOran    : claude.md §6A tablosu (12 ay referans)
+               Bireysel / Kritik=6.8 ... Eğitim / Prestijli=0.9
+VadeFactörü  : ≤6ay=−0.25, 12ay=0.00, 24ay=+0.15, 36ay=+0.28, 72ay=+0.75
+MeslekBonusu : Kamu=−0.30, Sağlık/Teknoloji=−0.20, Mevsimlik=+0.30
 ```
-
-3 aylık Düşük Risk kredisi %8, 10 yıllık Yüksek Risk kredisi %52 olabilir. Bu gerçekçi bant aralığı, prim kademelerini büyütmek ve vadeye duyarlı yapı kurmakla sağlandı.
 
 **Bileşen 2 — Taksit Hesaplama (`StandardInstallmentStrategy`):**
 
-Faiz oranı belirlendikten sonra taksit planı düz faiz (flat-rate) formülüyle üretilir:
+Vade oranı belirlendikten sonra taksit planı **amortisasyon (azalan bakiye)** formülüyle üretilir:
 
 ```
-totalAmount   = PrincipalAmount × (1 + InterestRate/100 × termYears)
-monthlyAmount = ROUND(totalAmount / Term, 2)
+r = rateAmount / 100 / 12       (yıllık ratio → aylık oran)
+A = P × r(1+r)^n / [(1+r)^n − 1]
 ```
 
-**Gerekçe:** Azalan bakiye (annuity) yöntemi daha gerçekçidir; ancak bu projenin kapsamı faiz modelinin doğruluğu değil, bankacılık domain'inin doğru modellenmesidir. Düz faiz formülü; kolay doğrulanabilir, test edilebilir ve açıklanabilirdir. Faiz oranı kısmında ise basit sabit oran yerine dinamik motor kullanılmış, bu da projenin domain gerçekçiliğini artırmıştır.
+**Gerekçe:** Düz faiz (flat-rate) başlangıçta kullanılmıştı; ancak projenin spec'inde (claude.md §6A) amortisasyon formülü açıkça belirtilmiş ve örnek hesaplamalar bu yöntemle örtüşmektedir. Amortisasyon, azalan anaparayı daha gerçekçi modeller ve bankacılık endüstrisinin fiilen kullandığı yöntemdir. Vade oranı ratio formatına geçiş ise `%` kullanımının kaldırılması ve UI'de `3.25`, `4.48` biçiminde gösterim anlamına gelir.
 
 ---
 
@@ -105,9 +103,9 @@ monthlyAmount = ROUND(totalAmount / Term, 2)
 
 ---
 
-### K-09 · `decimal(18,2)` hassasiyeti
+### K-09 · `decimal` hassasiyeti — parasal vs. oran alanları
 
-**Karar:** Tüm parasal alanlar (`PrincipalAmount`, `InterestRate`, `RemainingPrincipal`, `Amount`, `PaymentAmount`) `decimal` tipinde ve `HasPrecision(18, 2)` konfigürasyonuyla tanımlandı.
+**Karar:** Parasal alanlar (`PrincipalAmount`, `RemainingPrincipal`, `Amount`, `PaymentAmount`) `decimal(18, 2)` olarak tanımlandı. Oran alanları (`RateAmount`, `ApprovedRateAmount`) ise dört ondalık basamak hassasiyeti gerektirdiğinden `decimal(7, 4)` olarak tanımlandı.
 
 **Gerekçe:** `float` ve `double` IEEE 754 kayan noktalı aritmetik kullanır; bu aritmetik para hesaplamalarında yuvarlama hataları üretir (`0.1 + 0.2 ≠ 0.3`). `decimal` tipi ondalık aritmetiği tam olarak temsil eder. Bu, finansal sistemlerde endüstri standardıdır.
 
@@ -136,12 +134,13 @@ monthlyAmount = ROUND(totalAmount / Term, 2)
 **Mock Servis Algoritması:**
 
 ```csharp
-int baseScore = ScoreAge(dob)          // maks. 200 — 36-50 yaş pik
-              + ScoreIncome(income)    // maks. 250 — Türk bankacılığı gelir bantları
-              + ScoreEmployment(status)// maks. 200 — Aktif=200, İşsiz=20
-              + ScoreProfession(cat);  // maks. 150 — Kamu=150, Mevsimlik=45
+int baseScore = ScoreAge(dob)          // maks. 400 — 36-50 yaş pik
+              + ScoreIncome(income)    // maks. 550 — Türk bankacılığı gelir bantları
+              + ScoreEmployment(status)// maks. 400 — Aktif=400, İşsiz=40
+              + ScoreProfession(cat);  // maks. 350 — Kamu=350, Mevsimlik=90
 
-int finalScore = Math.Clamp(baseScore + customer.CreditScoreBonus, 0, 1000);
+int finalScore = Math.Clamp(baseScore + customer.CreditScoreBonus, 0, 1900);
+// Toplam baz maks. = 1700; bonus [−200, +200] ile nihai maks. = 1900
 ```
 
 **Neden profil tabanlı yapıldı:**
