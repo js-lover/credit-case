@@ -7,8 +7,8 @@ public record NegativeRecord(string RecordType, DateTime RecordDate, decimal Amo
 /// </summary>
 public record CreditScoreResult(
     int CustomerId,
-    int CreditScore,             // 0-1000
-    string RiskIndicator,        // Low, Medium, High
+    int CreditScore,             // 0-1900
+    string RiskIndicator,        // Low, Low, Medium, High, Very High
     IReadOnlyList<NegativeRecord> NegativeRecords,
     decimal DefaultProbability,  // 0.0-1.0
     DateTime QueryDate

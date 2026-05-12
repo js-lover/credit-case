@@ -2,6 +2,7 @@ using System.Reflection;
 using CreditCase.Api.Middleware;
 using CreditCase.Application;
 using CreditCase.Infrastructure;
+using CreditCase.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,6 +30,9 @@ builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
 var app = builder.Build();
+
+if (builder.Configuration.GetValue<bool>("SeedDatabase"))
+    await DatabaseSeeder.SeedAsync(app.Services);
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseRouting();
