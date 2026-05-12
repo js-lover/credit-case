@@ -9,7 +9,7 @@ public class LoanResponse
     public int CustomerId { get; set; }
     public LoanType LoanType { get; set; }
     public decimal PrincipalAmount { get; set; }
-    public decimal InterestRate { get; set; }
+    public decimal RateAmount { get; set; }
     public int Term { get; set; }
     public DateTime StartDate { get; set; }
     public LoanStatus Status { get; set; }

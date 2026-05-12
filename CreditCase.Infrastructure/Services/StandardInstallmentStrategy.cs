@@ -5,27 +5,37 @@ using CreditCase.Domain.Enums;
 namespace CreditCase.Infrastructure.Services;
 
 /// <summary>
-/// Düz faiz (flat-rate) yöntemiyle eşit taksitli standart ödeme planı üretir.
+/// Amortisasyon yöntemiyle eşit taksitli standart ödeme planı üretir.
+/// claude.md §6A Taksit Planı Üretimi:
+///   r = rateAmount / 100 / 12  (yıllık oran → aylık oran)
+///   A = P × r(1+r)^n / [(1+r)^n - 1]
 /// </summary>
 public class StandardInstallmentStrategy : IInstallmentPlanStrategy
 {
     public bool SupportsBalloon => false;
 
-    public List<Installment> Generate(decimal principalAmount, decimal interestRate, int term, DateTime startDate)
+    public List<Installment> Generate(decimal principalAmount, decimal rateAmount, int term, DateTime startDate)
     {
-        decimal termYears = term / 12m;
-        decimal totalAmount = principalAmount * (1 + interestRate / 100 * termYears);
-        decimal monthlyAmount = Math.Round(totalAmount / term, 2);
+        decimal monthly = ComputeMonthly(principalAmount, rateAmount, term);
 
         return Enumerable.Range(1, term)
             .Select(i => new Installment
             {
                 InstallmentNumber = i,
-                Amount = monthlyAmount,
+                Amount = monthly,
                 DueDate = startDate.AddMonths(i),
                 Status = InstallmentStatus.Unpaid,
                 IsBalloon = false
             })
             .ToList();
+    }
+
+    internal static decimal ComputeMonthly(decimal principal, decimal rateAmount, int term)
+    {
+        if (term <= 0 || principal <= 0) return 0m;
+        decimal r = rateAmount / 100m / 12m;
+        if (r == 0m) return Math.Round(principal / term, 2);
+        double factor = Math.Pow(1 + (double)r, term);
+        return Math.Round(principal * (decimal)(r * (decimal)factor / ((decimal)factor - 1)), 2);
     }
 }

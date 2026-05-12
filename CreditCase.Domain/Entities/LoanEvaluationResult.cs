@@ -24,7 +24,7 @@ public class LoanEvaluationResult
     public decimal ApprovedAmount { get; set; }     // Red durumunda 0
     public decimal MaximumAmount { get; set; }      // Müşterinin alabileceği üst sınır
     public int MaximumTerm { get; set; }            // Ay cinsinden maksimum vade
-    public decimal ApprovedInterestRate { get; set; }
+    public decimal ApprovedRateAmount { get; set; }
     public RiskCategory RiskLevel { get; set; }
     public int CreditScore { get; set; }
     public decimal DebtToIncomeRatio { get; set; }

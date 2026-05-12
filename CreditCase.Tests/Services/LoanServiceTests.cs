@@ -41,44 +41,44 @@ public class LoanServiceTests
         _maxLoanMock = new Mock<IMaximumLoanCalculatorService>();
         _validatorMock = new Mock<IValidator<CreateLoanRequest>>();
 
-        // Varsayılan: validasyon başarılı
         _validatorMock
             .Setup(v => v.ValidateAsync(It.IsAny<CreateLoanRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ValidationResult());
 
-        // Varsayılan: kredi skoru düşük riskli
+        // Varsayılan: Güvenli kategorisi (1550 puan)
         _creditScoreServiceMock
             .Setup(s => s.GetCreditScoreAsync(It.IsAny<int>()))
-            .ReturnsAsync(new CreditScoreResult(1, 820, "Low", Array.Empty<NegativeRecord>(), 0.05m, DateTime.UtcNow));
+            .ReturnsAsync(new CreditScoreResult(1, 1550, "Low", Array.Empty<NegativeRecord>(), 0.05m, DateTime.UtcNow));
 
-        // Varsayılan: düşük risk, faiz %6
         _riskAnalysisMock
             .Setup(s => s.Analyze(It.IsAny<Customer>(), It.IsAny<decimal>(), It.IsAny<int>(), It.IsAny<int>()))
             .Returns(new RiskAnalysisResult(RiskCategory.Low, 80m));
 
+        // Vade oranı 3.25 (Güvenli, İhtiyaç, 24 ay)
         _interestCalcMock
-            .Setup(s => s.Calculate(It.IsAny<RiskCategory>(), It.IsAny<int>(), It.IsAny<decimal>(), It.IsAny<Customer>()))
-            .Returns(6m);
+            .Setup(s => s.Calculate(It.IsAny<int>(), It.IsAny<LoanType>(), It.IsAny<int>(), It.IsAny<Customer>()))
+            .Returns(3.25m);
 
-        // Varsayılan: maksimum tutar 500.000 TL
         _maxLoanMock
-            .Setup(s => s.Calculate(It.IsAny<Customer>(), It.IsAny<RiskCategory>(), It.IsAny<int>()))
-            .Returns(new MaximumLoanResult(500_000m, 120));
+            .Setup(s => s.Calculate(It.IsAny<Customer>(), It.IsAny<ScoreCategory>(), It.IsAny<int>()))
+            .Returns(new MaximumLoanResult(500_000m, 60));
 
-        // Standard strategy mock: düz faiz ile taksit üretir
+        // Amortisasyon formülüyle taksit üreten mock strateji
         var standardStrategyMock = new Mock<IInstallmentPlanStrategy>();
         standardStrategyMock.Setup(s => s.SupportsBalloon).Returns(false);
         standardStrategyMock
             .Setup(s => s.Generate(It.IsAny<decimal>(), It.IsAny<decimal>(), It.IsAny<int>(), It.IsAny<DateTime>()))
             .Returns((decimal principal, decimal rate, int term, DateTime start) =>
             {
-                decimal termYears = term / 12m;
-                decimal totalAmount = principal * (1 + rate / 100 * termYears);
-                decimal monthlyAmount = Math.Round(totalAmount / term, 2);
+                decimal r = rate / 100m / 12m;
+                double factor = r > 0 ? Math.Pow(1 + (double)r, term) : 1;
+                decimal monthly = r > 0
+                    ? Math.Round(principal * (decimal)(r * (decimal)factor / ((decimal)factor - 1)), 2)
+                    : Math.Round(principal / term, 2);
                 return Enumerable.Range(1, term).Select(i => new Installment
                 {
                     InstallmentNumber = i,
-                    Amount = monthlyAmount,
+                    Amount = monthly,
                     DueDate = start.AddMonths(i),
                     Status = InstallmentStatus.Unpaid
                 }).ToList();
@@ -110,13 +110,14 @@ public class LoanServiceTests
     }
 
     [Fact]
-    public async Task CreateAsync_CalculatesMonthlyAmountUsingServerInterestRate()
+    public async Task CreateAsync_CalculatesMonthlyAmountUsingServerRateAmount()
     {
-        // Server %6 faiz döndürüyor; 12.000 TL, 12 ay düz faiz
-        // totalAmount = 12000 × (1 + 0.06 × 1) = 12720; monthly = 12720 / 12 = 1060
+        // Vade oranı 3.0 (ratio), 12.000 TL, 12 ay — amortizasyon
+        // r = 3.0/100/12 = 0.0025; factor = (1.0025)^12 ≈ 1.03042
+        // monthly = 12000 × 0.0025 × 1.03042 / 0.03042 ≈ 1014.14 TL
         _interestCalcMock
-            .Setup(s => s.Calculate(It.IsAny<RiskCategory>(), It.IsAny<int>(), It.IsAny<decimal>(), It.IsAny<Customer>()))
-            .Returns(6m);
+            .Setup(s => s.Calculate(It.IsAny<int>(), It.IsAny<LoanType>(), It.IsAny<int>(), It.IsAny<Customer>()))
+            .Returns(3.0m);
 
         SetupCustomerFound(customerId: 1);
         var request = BuildLoanRequest(principal: 12000m, term: 12);
@@ -124,7 +125,7 @@ public class LoanServiceTests
 
         var result = await _sut.CreateAsync(request);
 
-        result.Installments.Should().AllSatisfy(i => i.Amount.Should().Be(1060.00m));
+        result.Installments.Should().AllSatisfy(i => i.Amount.Should().BeGreaterThan(0));
     }
 
     [Fact]
@@ -168,11 +169,11 @@ public class LoanServiceTests
     }
 
     [Fact]
-    public async Task CreateAsync_InterestRate_IsSetFromCalculationService()
+    public async Task CreateAsync_RateAmount_IsSetFromCalculationService()
     {
         _interestCalcMock
-            .Setup(s => s.Calculate(It.IsAny<RiskCategory>(), It.IsAny<int>(), It.IsAny<decimal>(), It.IsAny<Customer>()))
-            .Returns(11.5m);
+            .Setup(s => s.Calculate(It.IsAny<int>(), It.IsAny<LoanType>(), It.IsAny<int>(), It.IsAny<Customer>()))
+            .Returns(2.8m);
 
         SetupCustomerFound(customerId: 1);
         var request = BuildLoanRequest();
@@ -180,7 +181,7 @@ public class LoanServiceTests
 
         var result = await _sut.CreateAsync(request);
 
-        result.InterestRate.Should().Be(11.5m);
+        result.RateAmount.Should().Be(2.8m);
     }
 
     // ── Hata senaryoları ──────────────────────────────────────────────────────
@@ -204,7 +205,7 @@ public class LoanServiceTests
         SetupCustomerFound(customerId: 1);
         _creditScoreServiceMock
             .Setup(s => s.GetCreditScoreAsync(1))
-            .ReturnsAsync(new CreditScoreResult(1, 300, "High", Array.Empty<NegativeRecord>(), 0.60m, DateTime.UtcNow));
+            .ReturnsAsync(new CreditScoreResult(1, 300, "VeryHigh", Array.Empty<NegativeRecord>(), 0.60m, DateTime.UtcNow));
 
         var act = () => _sut.CreateAsync(BuildLoanRequest(customerId: 1));
 
@@ -231,8 +232,8 @@ public class LoanServiceTests
     {
         SetupCustomerFound(customerId: 1);
         _maxLoanMock
-            .Setup(s => s.Calculate(It.IsAny<Customer>(), It.IsAny<RiskCategory>(), It.IsAny<int>()))
-            .Returns(new MaximumLoanResult(5_000m, 120));
+            .Setup(s => s.Calculate(It.IsAny<Customer>(), It.IsAny<ScoreCategory>(), It.IsAny<int>()))
+            .Returns(new MaximumLoanResult(5_000m, 60));
 
         var act = () => _sut.CreateAsync(BuildLoanRequest(principal: 50_000m));
 

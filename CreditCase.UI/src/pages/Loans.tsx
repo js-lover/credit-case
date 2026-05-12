@@ -249,8 +249,8 @@ function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
           {evaluation.isApproved && (
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <p className="text-[#64748B] text-xs">Faiz Oranı</p>
-                <p className="font-semibold text-[#0F172A]">%{evaluation.approvedInterestRate}</p>
+                <p className="text-[#64748B] text-xs">Vade Oranı</p>
+                <p className="font-semibold text-[#0F172A]">{evaluation.approvedRateAmount}</p>
               </div>
               <div>
                 <p className="text-[#64748B] text-xs">Aylık Taksit</p>
@@ -336,7 +336,7 @@ export function Loans() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#E2E8F0] text-left text-[#64748B]">
-                {['#', 'Müşteri', 'Tür', 'Ana Para', 'Toplam Ödenecek', 'Faiz', 'Vade', 'Başlangıç', 'Kalan', 'Durum', ''].map(h => (
+                {['#', 'Müşteri', 'Tür', 'Ana Para', 'Toplam Ödenecek', 'Vade Oranı', 'Vade', 'Başlangıç', 'Kalan', 'Durum', ''].map(h => (
                   <th key={h} className="px-4 py-3 font-medium">{h}</th>
                 ))}
               </tr>
@@ -363,7 +363,7 @@ export function Loans() {
                     <td className="px-4 py-3">{LOAN_TYPE_LABELS[l.loanType]}</td>
                     <td className="px-4 py-3 font-medium">{formatCurrency(l.principalAmount)}</td>
                     <td className="px-4 py-3 font-semibold text-[#1B4FD8]">{formatCurrency(l.totalPayableAmount)}</td>
-                    <td className="px-4 py-3 text-[#64748B]">%{l.interestRate}</td>
+                    <td className="px-4 py-3 text-[#64748B]">{l.rateAmount}</td>
                     <td className="px-4 py-3">{l.term < 12 ? `${l.term} ay` : l.term % 12 === 0 ? `${l.term / 12} yıl` : `${l.term} ay`}</td>
                     <td className="px-4 py-3 text-[#64748B]">{formatDate(l.startDate)}</td>
                     <td className="px-4 py-3 font-medium text-[#1B4FD8]">{formatCurrency(l.remainingPrincipal)}</td>

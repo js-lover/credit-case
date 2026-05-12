@@ -37,6 +37,11 @@ export const RiskCategory = {
 } as const;
 export type RiskCategory = (typeof RiskCategory)[keyof typeof RiskCategory];
 
+export const ScoreCategory = {
+  Kritik: 0, GelisimeAcik: 1, Dengeli: 2, Guvenli: 3, Prestijli: 4,
+} as const;
+export type ScoreCategory = (typeof ScoreCategory)[keyof typeof ScoreCategory];
+
 // ── Customer ──────────────────────────────────────────────────────────────────
 
 export interface CustomerResponse {
@@ -95,7 +100,7 @@ export interface LoanResponse {
   customerId: number;
   loanType: LoanType;
   principalAmount: number;
-  interestRate: number;
+  rateAmount: number;
   term: number;               // ay cinsinden vade
   startDate: string;
   status: LoanStatus;
@@ -167,8 +172,9 @@ export interface LoanEvaluationResponse {
   approvedAmount: number;
   maximumAmount: number;
   maximumTerm: number;
-  approvedInterestRate: number;
+  approvedRateAmount: number;
   riskLevel: RiskCategory;
+  creditScoreCategory: ScoreCategory;
   creditScore: number;
   debtToIncomeRatio: number;
   monthlyInstallmentEstimate: number;
@@ -211,6 +217,22 @@ export const RISK_CATEGORY_LABELS: Record<RiskCategory, string> = {
   [RiskCategory.Medium]:   'Orta Risk',
   [RiskCategory.High]:     'Yüksek Risk',
   [RiskCategory.VeryHigh]: 'Çok Yüksek Risk',
+};
+
+export const SCORE_CATEGORY_LABELS: Record<ScoreCategory, string> = {
+  [ScoreCategory.Kritik]:       'Kritik',
+  [ScoreCategory.GelisimeAcik]: 'Gelişime Açık',
+  [ScoreCategory.Dengeli]:      'Dengeli',
+  [ScoreCategory.Guvenli]:      'Güvenli',
+  [ScoreCategory.Prestijli]:    'Prestijli',
+};
+
+export const SCORE_CATEGORY_COLORS: Record<ScoreCategory, string> = {
+  [ScoreCategory.Kritik]:       '#DC2626',
+  [ScoreCategory.GelisimeAcik]: '#EA580C',
+  [ScoreCategory.Dengeli]:      '#D97706',
+  [ScoreCategory.Guvenli]:      '#16A34A',
+  [ScoreCategory.Prestijli]:    '#2563EB',
 };
 
 export const PROFESSION_LABELS: Record<ProfessionCategory, string> = {

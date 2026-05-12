@@ -88,13 +88,17 @@ public class LoanService : ILoanService
         if (creditScore.CreditScore < 400)
             throw new BusinessRuleException($"Kredi başvurusu reddedildi. Kredi skoru {creditScore.CreditScore}, minimum eşiğin altında.");
 
+        var scoreCategory = ScoreCategoryHelper.FromScore(creditScore.CreditScore);
+        if (scoreCategory == ScoreCategory.Kritik)
+            throw new BusinessRuleException("Kredi başvurusu reddedildi. Kredi skoru Kritik kategorisinde; manuel inceleme gerektirir.");
+
         // Risk analizi
         var risk = _riskAnalysis.Analyze(customer, request.PrincipalAmount, request.Term, creditScore.CreditScore);
         if (risk.Category == RiskCategory.VeryHigh)
             throw new BusinessRuleException("Kredi başvurusu reddedildi. Müşterinin risk profili çok yüksek.");
 
         // Maksimum tutar doğrulama
-        var maxLoan = _maxLoanCalculator.Calculate(customer, risk.Category, request.Term);
+        var maxLoan = _maxLoanCalculator.Calculate(customer, scoreCategory, request.Term);
         if (request.PrincipalAmount < MinLoanAmount)
             throw new BusinessRuleException($"Minimum kredi tutarı {MinLoanAmount:N0} TL'dir.");
         if (maxLoan.MaximumAmount > 0 && request.PrincipalAmount > maxLoan.MaximumAmount)
@@ -108,8 +112,8 @@ public class LoanService : ILoanService
                 throw new BusinessRuleException($"Balon ödeme için en az {BalloonMinCreditScore} kredi skoru gereklidir. Mevcut skor: {creditScore.CreditScore}.");
         }
 
-        // Faiz oranı banka tarafından hesaplanır; istemci tarafından belirlenemez.
-        decimal interestRate = _interestCalculation.Calculate(risk.Category, request.Term, request.PrincipalAmount, customer);
+        // Vade oranı banka tarafından hesaplanır; istemci tarafından belirlenemez.
+        decimal interestRate = _interestCalculation.Calculate(creditScore.CreditScore, request.LoanType, request.Term, customer);
 
         var strategy = _strategies.FirstOrDefault(s => s.SupportsBalloon == request.IsBalloonPayment)
             ?? throw new BusinessRuleException("İstenen ödeme türü için uygun bir taksit planı stratejisi bulunamadı.");
@@ -119,7 +123,7 @@ public class LoanService : ILoanService
             CustomerId = request.CustomerId,
             LoanType = request.LoanType,
             PrincipalAmount = request.PrincipalAmount,
-            InterestRate = interestRate,
+            RateAmount = interestRate,
             Term = request.Term,
             StartDate = request.StartDate,
             Status = LoanStatus.Active,
@@ -139,7 +143,7 @@ public class LoanService : ILoanService
         if (loan.Installments.Any())
             return loan.Installments.Sum(i => i.Amount);
 
-        decimal r = loan.InterestRate / 100 / 12;
+        decimal r = loan.RateAmount / 100m / 12m;
         if (r == 0 || loan.Term <= 0) return loan.PrincipalAmount;
         double factor = Math.Pow(1 + (double)r, loan.Term);
         decimal monthly = loan.PrincipalAmount * ((decimal)r * (decimal)factor / ((decimal)factor - 1));
@@ -152,7 +156,7 @@ public class LoanService : ILoanService
         CustomerId = loan.CustomerId,
         LoanType = loan.LoanType,
         PrincipalAmount = loan.PrincipalAmount,
-        InterestRate = loan.InterestRate,
+        RateAmount = loan.RateAmount,
         Term = loan.Term,
         StartDate = loan.StartDate,
         Status = loan.Status,

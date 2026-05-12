@@ -10,8 +10,8 @@ using FluentValidation;
 namespace CreditCase.Application.Services;
 
 /// <summary>
-/// Kredi değerlendirme orchestrator. CLAUDE.md §6A, §19.
-/// SRP: yalnızca koordine eder; risk analizi, faiz hesabı, maksimum tutar kendi servislerinde.
+/// Kredi değerlendirme orchestrator. claude.md §6A, §19.
+/// SRP: yalnızca koordine eder; risk analizi, vade oranı hesabı, maksimum tutar kendi servislerinde.
 /// </summary>
 public class LoanEvaluationService : ILoanEvaluationService
 {
@@ -19,7 +19,7 @@ public class LoanEvaluationService : ILoanEvaluationService
     private readonly ILoanEvaluationRepository _evaluationRepository;
     private readonly ICreditScoreService _creditScoreService;
     private readonly IRiskAnalysisService _riskAnalysis;
-    private readonly IInterestCalculationService _interestCalculation;
+    private readonly IInterestCalculationService _rateCalculation;
     private readonly IMaximumLoanCalculatorService _maxLoanCalculator;
     private readonly IValidator<LoanApplicationRequest> _validator;
 
@@ -28,7 +28,7 @@ public class LoanEvaluationService : ILoanEvaluationService
         ILoanEvaluationRepository evaluationRepository,
         ICreditScoreService creditScoreService,
         IRiskAnalysisService riskAnalysis,
-        IInterestCalculationService interestCalculation,
+        IInterestCalculationService rateCalculation,
         IMaximumLoanCalculatorService maxLoanCalculator,
         IValidator<LoanApplicationRequest> validator)
     {
@@ -36,15 +36,11 @@ public class LoanEvaluationService : ILoanEvaluationService
         _evaluationRepository = evaluationRepository;
         _creditScoreService = creditScoreService;
         _riskAnalysis = riskAnalysis;
-        _interestCalculation = interestCalculation;
+        _rateCalculation = rateCalculation;
         _maxLoanCalculator = maxLoanCalculator;
         _validator = validator;
     }
 
-    /// <summary>
-    /// Kredi başvurusunu değerlendirir, sonucu persist eder ve döner.
-    /// Red durumunda da kayıt oluşturulur; denetim izi için zorunludur.
-    /// </summary>
     public async Task<LoanEvaluationResponse> EvaluateAsync(LoanApplicationRequest request)
     {
         await _validator.ValidateAndThrowAsync(request);
@@ -57,13 +53,24 @@ public class LoanEvaluationService : ILoanEvaluationService
         var creditScoreResult = await _creditScoreService.GetCreditScoreAsync(request.CustomerId);
         int creditScore = creditScoreResult.CreditScore;
 
-        // 2. Risk analizi (Rule Engine)
-        var riskResult = _riskAnalysis.Analyze(customer, request.RequestedAmount, request.RequestedTerm, creditScore);
+        // 2. Kredi skoru kategorisi (vade oranı ve limitler için)
+        var scoreCategory = ScoreCategoryHelper.FromScore(creditScore);
 
-        // 3. Maksimum tutar hesabı
-        var maxLoan = _maxLoanCalculator.Calculate(customer, riskResult.Category, request.RequestedTerm);
+        // 3. Kategori bazlı vade sınırlaması — claude.md §6A
+        int maxTermForCategory = ScoreCategoryHelper.MaxTermMonths(scoreCategory);
+        int effectiveTerm = Math.Min(request.RequestedTerm, maxTermForCategory);
 
-        bool isApproved = riskResult.Category != RiskCategory.VeryHigh && maxLoan.MaximumAmount > 0;
+        // 4. Risk analizi (onay kararı için)
+        var riskResult = _riskAnalysis.Analyze(customer, request.RequestedAmount, effectiveTerm, creditScore);
+        var riskLevel = ScoreCategoryHelper.ToRiskCategory(scoreCategory);
+
+        // 5. Maksimum tutar hesabı
+        var maxLoan = _maxLoanCalculator.Calculate(customer, scoreCategory, effectiveTerm);
+
+        bool isApproved = scoreCategory != ScoreCategory.Kritik
+            && riskResult.Category != RiskCategory.VeryHigh
+            && maxLoan.MaximumAmount > 0;
+
         string? rejectionReason = null;
         decimal approvedAmount = 0;
         decimal approvedRate = 0;
@@ -72,18 +79,33 @@ public class LoanEvaluationService : ILoanEvaluationService
         if (isApproved)
         {
             approvedAmount = Math.Min(request.RequestedAmount, maxLoan.MaximumAmount);
-            approvedRate = _interestCalculation.Calculate(riskResult.Category, request.RequestedTerm, approvedAmount, customer);
-            monthlyEstimate = CalculateMonthlyInstallment(approvedAmount, approvedRate, request.RequestedTerm);
-        }
-        else
-        {
-            rejectionReason = riskResult.Category == RiskCategory.VeryHigh
-                ? $"Risk puanı {riskResult.TotalScore:F1}, minimum eşiğin altında. Kredi skoru: {creditScore}."
-                : "Aylık gelir ve mevcut borçlar dikkate alındığında borç kapasitesi yetersiz.";
+            approvedRate = _rateCalculation.Calculate(creditScore, request.LoanType, effectiveTerm, customer);
+            monthlyEstimate = CalculateMonthlyInstallment(approvedAmount, approvedRate, effectiveTerm);
+
+            // Minimum taksit kontrolü — claude.md §6A
+            decimal minInstallment = ScoreCategoryHelper.MinInstallmentAmount(scoreCategory);
+            if (monthlyEstimate < minInstallment)
+            {
+                isApproved = false;
+                rejectionReason = $"Tahmini aylık taksit ({monthlyEstimate:N2} TL), " +
+                    $"{scoreCategory} kategorisi için minimum taksit tutarının ({minInstallment:N0} TL) altında. " +
+                    "Daha yüksek kredi tutarı veya daha kısa vade deneyin.";
+                approvedAmount = 0;
+                approvedRate = 0;
+                monthlyEstimate = 0;
+            }
         }
 
-        // 4. Değerlendirme kaydını persist et (onay veya red, her iki durumda da)
-        decimal debtToIncomeRatio = CalculateDebtToIncomeRatio(customer, request.RequestedAmount, request.RequestedTerm);
+        if (!isApproved && rejectionReason is null)
+        {
+            rejectionReason = scoreCategory == ScoreCategory.Kritik
+                ? $"Kredi skoru {creditScore} — Kritik kategorisi, manuel inceleme gerektirir."
+                : riskResult.Category == RiskCategory.VeryHigh
+                    ? $"Risk puanı {riskResult.TotalScore:F1}, minimum eşiğin altında."
+                    : "Aylık gelir ve mevcut borçlar dikkate alındığında borç kapasitesi yetersiz.";
+        }
+
+        decimal debtToIncomeRatio = CalculateDebtToIncomeRatio(customer, request.RequestedAmount, effectiveTerm);
 
         var evaluation = new LoanEvaluationResult
         {
@@ -95,19 +117,19 @@ public class LoanEvaluationService : ILoanEvaluationService
             ApprovedAmount = approvedAmount,
             MaximumAmount = maxLoan.MaximumAmount,
             MaximumTerm = maxLoan.MaximumTerm,
-            ApprovedInterestRate = approvedRate,
-            RiskLevel = riskResult.Category,
+            ApprovedRateAmount = approvedRate,
+            RiskLevel = riskLevel,
             CreditScore = creditScore,
             DebtToIncomeRatio = debtToIncomeRatio,
             MonthlyInstallmentEstimate = monthlyEstimate,
             RejectionReason = rejectionReason,
             EvaluationDate = DateTime.UtcNow,
-            // Onaylanan başvurular 30 gün geçerlidir.
-            ExpirationDate = DateTime.UtcNow.AddDays(30)
+            // claude.md §6A — Geçerlilik Süresi: 7 Gün
+            ExpirationDate = DateTime.UtcNow.AddDays(7)
         };
 
         var saved = await _evaluationRepository.AddAsync(evaluation);
-        return MapToResponse(saved, customer);
+        return MapToResponse(saved, customer, scoreCategory);
     }
 
     public async Task<LoanEvaluationResponse> GetByIdAsync(int evaluationId)
@@ -115,7 +137,8 @@ public class LoanEvaluationService : ILoanEvaluationService
         var evaluation = await _evaluationRepository.GetByIdAsync(evaluationId);
         if (evaluation is null)
             throw new NotFoundException($"{evaluationId} numaralı kredi değerlendirmesi bulunamadı.");
-        return MapToResponse(evaluation, evaluation.Customer);
+        return MapToResponse(evaluation, evaluation.Customer,
+            ScoreCategoryHelper.FromScore(evaluation.CreditScore));
     }
 
     public async Task<IEnumerable<LoanEvaluationResponse>> GetByCustomerIdAsync(int customerId)
@@ -125,21 +148,18 @@ public class LoanEvaluationService : ILoanEvaluationService
             throw new NotFoundException($"{customerId} numaralı müşteri bulunamadı.");
 
         var evaluations = await _evaluationRepository.GetByCustomerIdAsync(customerId);
-        return evaluations.Select(e => MapToResponse(e, customer));
+        return evaluations.Select(e => MapToResponse(e, customer,
+            ScoreCategoryHelper.FromScore(e.CreditScore)));
     }
 
-    /// <summary>
-    /// Müşterinin mevcut profiliyle alabileceği maksimum krediyi simüle eder.
-    /// Standart (en iyi senaryo) parametrelerle bir değerlendirme çalıştırır.
-    /// </summary>
     public async Task<LoanEvaluationResponse> GetMaximumEligibilityAsync(int customerId)
     {
         var request = new LoanApplicationRequest
         {
             CustomerId = customerId,
             LoanType = LoanType.Personal,
-            RequestedAmount = 1_000_000,  // üst sınır — gerçek maks. hesapla bulunacak
-            RequestedTerm = 120           // en uzun vade
+            RequestedAmount = 1_000_000,
+            RequestedTerm = 72   // claude.md §6A maksimum vade
         };
         return await EvaluateAsync(request);
     }
@@ -147,16 +167,16 @@ public class LoanEvaluationService : ILoanEvaluationService
     // ── Yardımcı metotlar ────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Amortisasyon formülü: A = P × [r(1+r)^n] / [(1+r)^n - 1]
+    /// Amortisasyon formülü: A = P × r(1+r)^n / [(1+r)^n - 1]
+    /// rateAmount ratio formatındadır (örn: 3.25 → yıllık %3.25).
     /// </summary>
-    private static decimal CalculateMonthlyInstallment(decimal principal, decimal annualRatePercent, int termMonths)
+    private static decimal CalculateMonthlyInstallment(decimal principal, decimal rateAmount, int termMonths)
     {
         if (termMonths <= 0 || principal <= 0) return 0;
-        decimal r = annualRatePercent / 100 / 12;
+        decimal r = rateAmount / 100m / 12m;
         if (r == 0) return Math.Round(principal / termMonths, 2);
         double factor = Math.Pow(1 + (double)r, termMonths);
-        decimal monthly = principal * (decimal)(r * (decimal)factor / ((decimal)factor - 1));
-        return Math.Round(monthly, 2);
+        return Math.Round(principal * (decimal)(r * (decimal)factor / ((decimal)factor - 1)), 2);
     }
 
     private static decimal CalculateDebtToIncomeRatio(Customer customer, decimal requestedAmount, int termMonths)
@@ -173,7 +193,8 @@ public class LoanEvaluationService : ILoanEvaluationService
         return Math.Round((existingDebt + newMonthly) / customer.MonthlyIncome, 4);
     }
 
-    private static LoanEvaluationResponse MapToResponse(LoanEvaluationResult e, Customer customer) => new()
+    private static LoanEvaluationResponse MapToResponse(
+        LoanEvaluationResult e, Customer customer, ScoreCategory scoreCategory) => new()
     {
         Id = e.Id,
         CustomerId = e.CustomerId,
@@ -185,8 +206,9 @@ public class LoanEvaluationService : ILoanEvaluationService
         ApprovedAmount = e.ApprovedAmount,
         MaximumAmount = e.MaximumAmount,
         MaximumTerm = e.MaximumTerm,
-        ApprovedInterestRate = e.ApprovedInterestRate,
+        ApprovedRateAmount = e.ApprovedRateAmount,
         RiskLevel = e.RiskLevel,
+        CreditScoreCategory = scoreCategory,
         CreditScore = e.CreditScore,
         DebtToIncomeRatio = e.DebtToIncomeRatio,
         MonthlyInstallmentEstimate = e.MonthlyInstallmentEstimate,

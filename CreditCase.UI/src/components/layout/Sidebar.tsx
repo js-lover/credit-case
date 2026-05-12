@@ -11,9 +11,8 @@ export function Sidebar() {
   return (
     <aside className="w-56 shrink-0 bg-[#0F172A] min-h-screen flex flex-col">
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-white/10">
-        <span className="text-white font-bold text-lg tracking-tight">CreditCase</span>
-        <p className="text-white/40 text-xs mt-0.5">Loan Management</p>
+      <div className="px-4 py-4 border-b border-white/10">
+        <img src="/logo.svg" alt="Architecht" className="h-20 w-auto" />
       </div>
 
       {/* Nav */}

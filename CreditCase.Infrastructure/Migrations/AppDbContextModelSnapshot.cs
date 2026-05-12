@@ -71,7 +71,7 @@ namespace CreditCase.Infrastructure.Migrations
                         .HasColumnType("int");
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
                     b.Property<int>("CustomerId").HasColumnType("int");
-                    b.Property<decimal>("InterestRate").HasPrecision(5, 2).HasColumnType("decimal(5,2)");
+                    b.Property<decimal>("RateAmount").HasPrecision(7, 4).HasColumnType("decimal(7,4)");
                     b.Property<string>("LoanType").IsRequired().HasColumnType("nvarchar(max)");
                     b.Property<decimal>("PrincipalAmount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
                     b.Property<decimal>("RemainingPrincipal").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
@@ -90,7 +90,7 @@ namespace CreditCase.Infrastructure.Migrations
                         .HasColumnType("int");
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
                     b.Property<decimal>("ApprovedAmount").HasPrecision(18, 2).HasColumnType("decimal(18,2)");
-                    b.Property<decimal>("ApprovedInterestRate").HasPrecision(5, 2).HasColumnType("decimal(5,2)");
+                    b.Property<decimal>("ApprovedRateAmount").HasPrecision(7, 4).HasColumnType("decimal(7,4)");
                     b.Property<int>("CreditScore").HasColumnType("int");
                     b.Property<int>("CustomerId").HasColumnType("int");
                     b.Property<DateTime?>("DeletedAt").HasColumnType("datetime2");

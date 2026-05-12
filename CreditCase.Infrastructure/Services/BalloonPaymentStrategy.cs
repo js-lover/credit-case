@@ -11,16 +11,15 @@ namespace CreditCase.Infrastructure.Services;
 /// </summary>
 public class BalloonPaymentStrategy : IInstallmentPlanStrategy
 {
-    private const decimal RegularPaymentRatio = 0.60m;   // Normal aylık tutarın %60'ı
-    private const decimal MaxBalloonRatio = 0.50m;        // Anapara ile karşılaştırma limiti
+    private const decimal RegularPaymentRatio = 0.60m;
+    private const decimal MaxBalloonRatio = 0.50m;
 
     public bool SupportsBalloon => true;
 
-    public List<Installment> Generate(decimal principalAmount, decimal interestRate, int term, DateTime startDate)
+    public List<Installment> Generate(decimal principalAmount, decimal rateAmount, int term, DateTime startDate)
     {
-        decimal termYears = term / 12m;
-        decimal totalAmount = principalAmount * (1 + interestRate / 100 * termYears);
-        decimal normalMonthly = totalAmount / term;
+        decimal normalMonthly = StandardInstallmentStrategy.ComputeMonthly(principalAmount, rateAmount, term);
+        decimal totalAmount = normalMonthly * term;
 
         decimal regularAmount = Math.Round(normalMonthly * RegularPaymentRatio, 2);
         decimal balloonAmount = Math.Round(totalAmount - regularAmount * (term - 1), 2);

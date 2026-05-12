@@ -10,9 +10,10 @@ import type {
 import {
   LoanStatus, LoanType, RiskCategory,
   LOAN_TYPE_LABELS, RISK_CATEGORY_LABELS,
+  SCORE_CATEGORY_LABELS, SCORE_CATEGORY_COLORS,
 } from '../types';
 
-const TERM_OPTIONS = [3, 6, 12, 24, 36, 48, 60, 84, 120];
+const TERM_OPTIONS = [6, 12, 18, 24, 36, 48, 60, 72];
 import { PageLayout } from '../components/layout/PageLayout';
 import { StatCard } from '../components/ui/Card';
 import { LoanStatusBadge } from '../components/ui/Badge';
@@ -132,7 +133,15 @@ function EvaluationResult({ result, onClose }: { result: LoanEvaluationResponse;
             <p className="text-xs text-red-600 mt-0.5">{result.rejectionReason}</p>
           )}
         </div>
-        <RiskBadge level={result.riskLevel} />
+        <div className="flex items-center gap-2">
+          <span
+            className="text-xs font-semibold px-2 py-1 rounded-full text-white"
+            style={{ backgroundColor: SCORE_CATEGORY_COLORS[result.creditScoreCategory] }}
+          >
+            {SCORE_CATEGORY_LABELS[result.creditScoreCategory]}
+          </span>
+          <RiskBadge level={result.riskLevel} />
+        </div>
       </div>
 
       {/* Sayısal değerler */}
@@ -142,7 +151,7 @@ function EvaluationResult({ result, onClose }: { result: LoanEvaluationResponse;
         {result.isApproved && (
           <>
             <Row label="Onaylanan Tutar" value={formatCurrency(result.approvedAmount)} highlight />
-            <Row label="Faiz Oranı" value={`%${result.approvedInterestRate}`} highlight />
+            <Row label="Vade Oranı" value={`${result.approvedRateAmount}`} highlight />
             <Row label="Maks. Tutar" value={formatCurrency(result.maximumAmount)} />
             <Row label="Maks. Vade" value={`${result.maximumTerm} ay`} />
             <Row label="Tahmini Taksit" value={formatCurrency(result.monthlyInstallmentEstimate)} />
@@ -177,6 +186,7 @@ export function CustomerDetail() {
   const [summary, setSummary] = useState<CustomerSummaryResponse | null>(null);
   const [loans, setLoans] = useState<LoanResponse[]>([]);
   const [evaluations, setEvaluations] = useState<LoanEvaluationResponse[]>([]);
+  const [creditProfile, setCreditProfile] = useState<LoanEvaluationResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [evalModal, setEvalModal] = useState<'form' | 'result' | null>(null);
   const [evalResult, setEvalResult] = useState<LoanEvaluationResponse | null>(null);
@@ -192,6 +202,11 @@ export function CustomerDetail() {
         setSummary(s);
         setLoans(all.filter(l => l.customerId === customerId));
         setEvaluations(evals);
+
+        // Kredi notu ve risk kategorisi için maksimum uygunluk sorgusu
+        loanEvaluationService.getMaximumEligibility(customerId)
+          .then(setCreditProfile)
+          .catch(() => {});
       } catch {
         navigate('/customers');
       } finally {
@@ -223,7 +238,7 @@ export function CustomerDetail() {
       }
     >
       {/* Borç özeti kartları */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <StatCard label="Toplam Kredi" value={summary.totalLoans} sub={`${activeLoans} aktif`} />
         <StatCard label="Kalan Anapara" value={formatCurrency(summary.totalRemainingPrincipal)} accent="default" />
         <StatCard label="Bekleyen Borç" value={formatCurrency(summary.totalOutstandingDebt)} accent="warning" />
@@ -235,13 +250,76 @@ export function CustomerDetail() {
         />
       </div>
 
+      {/* Kredi notu ve risk profili */}
+      <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm px-5 py-4 mb-6">
+        {creditProfile ? (
+          <div className="flex flex-wrap items-center gap-6">
+            {/* Skor göstergesi */}
+            <div className="flex items-center gap-3">
+              <div className="relative w-14 h-14 flex-shrink-0">
+                <svg viewBox="0 0 36 36" className="w-14 h-14 -rotate-90">
+                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="#E2E8F0" strokeWidth="3" />
+                  <circle
+                    cx="18" cy="18" r="15.9" fill="none"
+                    stroke={
+                      creditProfile.riskLevel === 0 ? '#16A34A' :
+                      creditProfile.riskLevel === 1 ? '#D97706' :
+                      creditProfile.riskLevel === 2 ? '#EA580C' : '#DC2626'
+                    }
+                    strokeWidth="3"
+                    strokeDasharray={`${(creditProfile.creditScore / 1000) * 100} 100`}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-[#0F172A]">
+                  {creditProfile.creditScore}
+                </span>
+              </div>
+              <div>
+                <p className="text-xs text-[#64748B]">Kredi Notu</p>
+                <p className="text-lg font-bold text-[#0F172A]">{creditProfile.creditScore} <span className="text-xs font-normal text-[#64748B]">/ 1000</span></p>
+              </div>
+            </div>
+
+            <div className="w-px h-10 bg-[#E2E8F0] hidden sm:block" />
+
+            {/* Risk kategorisi */}
+            <div>
+              <p className="text-xs text-[#64748B] mb-1">Risk Kategorisi</p>
+              <RiskBadge level={creditProfile.riskLevel} />
+            </div>
+
+            <div className="w-px h-10 bg-[#E2E8F0] hidden sm:block" />
+
+            {/* Maks. uygun tutar */}
+            <div>
+              <p className="text-xs text-[#64748B]">Maks. Uygun Kredi</p>
+              <p className="font-semibold text-[#1B4FD8]">{formatCurrency(creditProfile.maximumAmount)}</p>
+            </div>
+
+            {/* Skor açıklaması */}
+            <div className="ml-auto text-xs text-[#64748B] hidden lg:block">
+              <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />750+ Düşük Risk &nbsp;
+              <span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1" />600–749 Orta &nbsp;
+              <span className="inline-block w-2 h-2 rounded-full bg-orange-500 mr-1" />400–599 Yüksek &nbsp;
+              <span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />&lt;400 Çok Yüksek
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 text-sm text-[#64748B]">
+            <div className="w-4 h-4 border-2 border-[#1B4FD8] border-t-transparent rounded-full animate-spin" />
+            Kredi notu hesaplanıyor…
+          </div>
+        )}
+      </div>
+
       {/* Kredi listesi */}
       <h2 className="text-sm font-semibold text-[#64748B] uppercase tracking-wide mb-3">Krediler</h2>
       <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden mb-6">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[#E2E8F0] text-left text-[#64748B]">
-              {['Tür', 'Ana Para', 'Faiz', 'Vade', 'Kalan', 'Durum', ''].map(h => (
+              {['Tür', 'Ana Para', 'Vade Oranı', 'Vade', 'Kalan', 'Durum', ''].map(h => (
                 <th key={h} className="px-4 py-3 font-medium">{h}</th>
               ))}
             </tr>
@@ -251,7 +329,7 @@ export function CustomerDetail() {
               <tr key={l.id} className="border-b border-[#E2E8F0] last:border-0 hover:bg-[#F8FAFC]">
                 <td className="px-4 py-3 font-medium">{LOAN_TYPE_LABELS[l.loanType]}</td>
                 <td className="px-4 py-3">{formatCurrency(l.principalAmount)}</td>
-                <td className="px-4 py-3">%{l.interestRate}</td>
+                <td className="px-4 py-3">{l.rateAmount}</td>
                 <td className="px-4 py-3">{l.term} ay</td>
                 <td className="px-4 py-3 font-medium text-[#1B4FD8]">{formatCurrency(l.remainingPrincipal)}</td>
                 <td className="px-4 py-3"><LoanStatusBadge status={l.status} /></td>
@@ -277,7 +355,7 @@ export function CustomerDetail() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[#E2E8F0] text-left text-[#64748B]">
-                  {['Tarih', 'Tür', 'İstenen', 'Onaylanan', 'Faiz', 'Skor', 'Risk', 'Karar'].map(h => (
+                  {['Tarih', 'Tür', 'İstenen', 'Onaylanan', 'Vade Oranı', 'Skor', 'Risk', 'Karar'].map(h => (
                     <th key={h} className="px-4 py-3 font-medium">{h}</th>
                   ))}
                 </tr>
@@ -289,7 +367,7 @@ export function CustomerDetail() {
                     <td className="px-4 py-3">{LOAN_TYPE_LABELS[ev.requestedLoanType]}</td>
                     <td className="px-4 py-3">{formatCurrency(ev.requestedAmount)}</td>
                     <td className="px-4 py-3 font-medium">{ev.isApproved ? formatCurrency(ev.approvedAmount) : '—'}</td>
-                    <td className="px-4 py-3">{ev.isApproved ? `%${ev.approvedInterestRate}` : '—'}</td>
+                    <td className="px-4 py-3">{ev.isApproved ? ev.approvedRateAmount : '—'}</td>
                     <td className="px-4 py-3">{ev.creditScore}</td>
                     <td className="px-4 py-3"><RiskBadge level={ev.riskLevel} /></td>
                     <td className="px-4 py-3">

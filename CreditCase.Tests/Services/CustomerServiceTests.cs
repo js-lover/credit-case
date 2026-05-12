@@ -205,7 +205,7 @@ public class CustomerServiceTests
     {
         // Arrange
         var customer = BuildCustomer(id: 1);
-        _repositoryMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(customer);
+        _repositoryMock.Setup(r => r.GetByIdWithLoansAndInstallmentsAsync(1)).ReturnsAsync(customer);
 
         // Act
         await _sut.DeleteAsync(1);
@@ -221,7 +221,7 @@ public class CustomerServiceTests
     {
         // Arrange — repository soft-delete davranışını simüle ediyor
         var customer = BuildCustomer(id: 1);
-        _repositoryMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(customer);
+        _repositoryMock.Setup(r => r.GetByIdWithLoansAndInstallmentsAsync(1)).ReturnsAsync(customer);
         _repositoryMock
             .Setup(r => r.DeleteAsync(It.IsAny<Customer>()))
             .Callback<Customer>(c => c.IsDeleted = true)
@@ -239,7 +239,7 @@ public class CustomerServiceTests
     {
         // Arrange
         var customer = BuildCustomer(id: 1);
-        _repositoryMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(customer);
+        _repositoryMock.Setup(r => r.GetByIdWithLoansAndInstallmentsAsync(1)).ReturnsAsync(customer);
         _repositoryMock
             .Setup(r => r.DeleteAsync(It.IsAny<Customer>()))
             .Callback<Customer>(c => c.DeletedAt = DateTime.UtcNow)

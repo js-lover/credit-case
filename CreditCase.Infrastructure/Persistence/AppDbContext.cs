@@ -51,7 +51,7 @@ public class AppDbContext : DbContext
             entity.HasKey(e => e.Id);
             // Finansal alanlar için decimal precision zorunludur; float/double kullanılmaz.
             entity.Property(e => e.PrincipalAmount).HasPrecision(18, 2);
-            entity.Property(e => e.InterestRate).HasPrecision(5, 2);
+            entity.Property(e => e.RateAmount).HasPrecision(7, 4);
             entity.Property(e => e.RemainingPrincipal).HasPrecision(18, 2);
             // Enum'lar DB'de okunabilir string olarak saklanır (0/1 yerine "Active"/"Closed").
             entity.Property(e => e.LoanType).HasConversion<string>();
@@ -91,7 +91,7 @@ public class AppDbContext : DbContext
             entity.Property(e => e.RequestedAmount).HasPrecision(18, 2);
             entity.Property(e => e.ApprovedAmount).HasPrecision(18, 2);
             entity.Property(e => e.MaximumAmount).HasPrecision(18, 2);
-            entity.Property(e => e.ApprovedInterestRate).HasPrecision(5, 2);
+            entity.Property(e => e.ApprovedRateAmount).HasPrecision(7, 4);
             entity.Property(e => e.DebtToIncomeRatio).HasPrecision(5, 4);
             entity.Property(e => e.MonthlyInstallmentEstimate).HasPrecision(18, 2);
             entity.Property(e => e.RiskLevel).HasConversion<string>();

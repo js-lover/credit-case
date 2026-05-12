@@ -5,16 +5,16 @@ using CreditCase.Domain.Enums;
 namespace CreditCase.Infrastructure.Services;
 
 /// <summary>
-/// Dış kredi skoru servisinin mock implementasyonu. CLAUDE.md §12.
+/// Dış kredi skoru servisinin mock implementasyonu. claude.md §12.
 ///
-/// Skor 4 bileşenden hesaplanır (toplam baz maks. 800):
-///   Yaş           → maks. 200 puan
-///   Aylık Gelir   → maks. 250 puan
-///   İstihdam      → maks. 200 puan
-///   Meslek        → maks. 150 puan
+/// Skor 4 bileşenden hesaplanır (toplam baz maks. 1700):
+///   Yaş           → maks. 400 puan
+///   Aylık Gelir   → maks. 550 puan
+///   İstihdam      → maks. 400 puan
+///   Meslek        → maks. 350 puan
 ///
 /// Ödeme geçmişi bonusu (Customer.CreditScoreBonus, -200 / +200) baz skora eklenir.
-/// Nihai skor [0, 1000] aralığında kısıtlanır.
+/// Nihai skor [0, 1900] aralığında kısıtlanır; claude.md §6A standartlarıyla örtüşür.
 /// </summary>
 public class MockCreditScoreService : ICreditScoreService
 {
@@ -32,8 +32,7 @@ public class MockCreditScoreService : ICreditScoreService
         int finalScore;
         if (customer is null)
         {
-            // Profil bulunamazsa minimum geçerli skor.
-            finalScore = 400;
+            finalScore = 800;  // Profil bulunamazsa Dengeli alt sınırı
         }
         else
         {
@@ -43,13 +42,28 @@ public class MockCreditScoreService : ICreditScoreService
             int professionScore = ScoreProfession(customer.ProfessionCategory);
 
             int baseScore = ageScore + incomeScore + employmentScore + professionScore;
-            finalScore = Math.Clamp(baseScore + customer.CreditScoreBonus, 0, 1000);
+            finalScore = Math.Clamp(baseScore + customer.CreditScoreBonus, 0, 1900);
         }
 
-        string indicator = finalScore >= 750 ? "Low" : finalScore >= 600 ? "Medium" : "High";
-        decimal defaultProbability = finalScore >= 750 ? 0.05m : finalScore >= 600 ? 0.15m : 0.35m;
+        var scoreCategory = ScoreCategoryHelper.FromScore(finalScore);
+        string indicator = scoreCategory switch
+        {
+            ScoreCategory.Prestijli    => "Low",
+            ScoreCategory.Guvenli      => "Low",
+            ScoreCategory.Dengeli      => "Medium",
+            ScoreCategory.GelisimeAcik => "High",
+            _                          => "VeryHigh"
+        };
+        decimal defaultProbability = scoreCategory switch
+        {
+            ScoreCategory.Prestijli    => 0.02m,
+            ScoreCategory.Guvenli      => 0.05m,
+            ScoreCategory.Dengeli      => 0.12m,
+            ScoreCategory.GelisimeAcik => 0.25m,
+            _                          => 0.45m
+        };
 
-        IReadOnlyList<NegativeRecord> negativeRecords = finalScore < 600
+        IReadOnlyList<NegativeRecord> negativeRecords = finalScore < 1150
             ? [new NegativeRecord("Payment Late", DateTime.UtcNow.AddMonths(-6), 1_200m)]
             : [];
 
@@ -63,61 +77,57 @@ public class MockCreditScoreService : ICreditScoreService
         );
     }
 
-    // ── Yaş puanı (maks. 200) ────────────────────────────────────────────────────
-    // 36-50 yaş bandı en yüksek kredi güvenilirliğini temsil eder.
-    // Çok genç ve çok yaşlı müşteriler daha düşük puan alır.
+    // ── Yaş puanı (maks. 400) ────────────────────────────────────────────────────
     private static int ScoreAge(DateTime dateOfBirth)
     {
         int age = (int)((DateTime.UtcNow - dateOfBirth).TotalDays / 365.25);
         return age switch
         {
-            < 21      => 40,
-            < 26      => 100,
-            < 36      => 160,
-            < 51      => 200,   // pik — 36-50
-            < 61      => 175,
-            < 66      => 120,
-            _         => 55
+            < 21  => 80,
+            < 26  => 200,
+            < 36  => 320,
+            < 51  => 400,   // pik — 36-50
+            < 61  => 350,
+            < 66  => 240,
+            _     => 110
         };
     }
 
-    // ── Gelir puanı (maks. 250) ──────────────────────────────────────────────────
-    // Türk bankacılığı referans gelir bantları.
+    // ── Gelir puanı (maks. 550) ──────────────────────────────────────────────────
     private static int ScoreIncome(decimal monthlyIncome) => monthlyIncome switch
     {
-        < 3_000m    => 30,
-        < 6_000m    => 85,
-        < 10_000m   => 145,
-        < 20_000m   => 205,
-        < 50_000m   => 240,
-        _           => 250
+        < 3_000m    => 60,
+        < 6_000m    => 170,
+        < 10_000m   => 290,
+        < 20_000m   => 410,
+        < 50_000m   => 495,
+        _           => 550
     };
 
-    // ── İstihdam durumu puanı (maks. 200) ────────────────────────────────────────
+    // ── İstihdam durumu puanı (maks. 400) ────────────────────────────────────────
     private static int ScoreEmployment(EmploymentStatus status) => status switch
     {
-        EmploymentStatus.Active     => 200,   // sabit işçi — en güvenli
-        EmploymentStatus.Retired    => 170,   // düzenli emekli maaşı
-        EmploymentStatus.Freelance  => 130,   // değişken gelir
-        EmploymentStatus.PartTime   => 100,   // kısmi çalışma
-        EmploymentStatus.Unemployed => 20,    // aktif gelir yok
-        _                           => 100
+        EmploymentStatus.Active     => 400,
+        EmploymentStatus.Retired    => 340,
+        EmploymentStatus.Freelance  => 260,
+        EmploymentStatus.PartTime   => 200,
+        EmploymentStatus.Unemployed => 40,
+        _                           => 200
     };
 
-    // ── Meslek kategorisi puanı (maks. 150) ──────────────────────────────────────
-    // Kamu ve sağlık sektörü geleneksel olarak en stabil kabul edilir.
+    // ── Meslek kategorisi puanı (maks. 350) ──────────────────────────────────────
     private static int ScoreProfession(ProfessionCategory category) => category switch
     {
-        ProfessionCategory.Government   => 150,
-        ProfessionCategory.Healthcare   => 140,
-        ProfessionCategory.Finance      => 135,
-        ProfessionCategory.Education    => 130,
-        ProfessionCategory.Technology   => 130,
-        ProfessionCategory.Commerce     => 100,
-        ProfessionCategory.Services     => 90,
-        ProfessionCategory.Other        => 80,
-        ProfessionCategory.Construction => 70,
-        ProfessionCategory.Seasonal     => 45,
-        _                               => 80
+        ProfessionCategory.Government   => 350,
+        ProfessionCategory.Healthcare   => 315,
+        ProfessionCategory.Finance      => 295,
+        ProfessionCategory.Education    => 280,
+        ProfessionCategory.Technology   => 280,
+        ProfessionCategory.Commerce     => 220,
+        ProfessionCategory.Services     => 195,
+        ProfessionCategory.Other        => 175,
+        ProfessionCategory.Construction => 150,
+        ProfessionCategory.Seasonal     => 90,
+        _                               => 175
     };
 }

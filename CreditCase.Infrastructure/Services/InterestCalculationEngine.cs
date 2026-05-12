@@ -5,53 +5,93 @@ using CreditCase.Domain.Enums;
 namespace CreditCase.Infrastructure.Services;
 
 /// <summary>
-/// CLAUDE.md §6A Faiz Oranı Formülü:
-///   Son Faiz = Temel (%5) + Risk Primi + Vade Primi + Tutar Primi - Meslek Bonusu
+/// claude.md §6A Dinamik Vade Oranı Hesaplama:
+///   1. Kredi türü × kredi skoru kategorisi → temel vade oranı (12 ay referans)
+///   2. Vade süresine göre faktör uygulanır
+///   3. Meslek bonusu/penaltısı eklenir
 ///
-///   Risk Primi   : Low=0%, Medium=+5%, High=+12%
-///   Vade Primi   : ≤6ay=0%, 7-12=+3%, 13-24=+7%, 25-36=+12%, 37-60=+18%, 61-84=+25%, 85+=+35%
-///   Tutar Primi  : ≤2x gelir=0%, 2-3x=+1%, >3x=+2%
-///   Meslek Bonusu: Government=-1%
+/// Sonuç ratio formatındadır (örn: 3.25, 4.48); yüzde değildir (UI'de "%" kullanılmaz).
 /// </summary>
 public class InterestCalculationEngine : IInterestCalculationService
 {
-    private const decimal BaseRate = 5.0m;
-
-    public decimal Calculate(RiskCategory risk, int termMonths, decimal requestedAmount, Customer customer)
+    // Temel Vade Oranları — 12 ay vade için referans (Kredi Türü × ScoreCategory).
+    // claude.md §6A Kredi Türüne Göre Temel Vade Oranı tablosu.
+    private static readonly Dictionary<LoanType, Dictionary<ScoreCategory, decimal>> BaseRates = new()
     {
-        decimal riskPremium = risk switch
+        [LoanType.Personal] = new()
         {
-            RiskCategory.Low    => 0m,
-            RiskCategory.Medium => 5m,
-            RiskCategory.High   => 12m,
-            _                   => 0m  // VeryHigh: reddedilir, bu noktaya ulaşmamalı
+            [ScoreCategory.Kritik]       = 6.8m,
+            [ScoreCategory.GelisimeAcik] = 5.2m,
+            [ScoreCategory.Dengeli]      = 4.0m,
+            [ScoreCategory.Guvenli]      = 3.0m,
+            [ScoreCategory.Prestijli]    = 2.0m,
+        },
+        [LoanType.Vehicle] = new()
+        {
+            [ScoreCategory.Kritik]       = 5.8m,
+            [ScoreCategory.GelisimeAcik] = 4.2m,
+            [ScoreCategory.Dengeli]      = 3.0m,
+            [ScoreCategory.Guvenli]      = 2.0m,
+            [ScoreCategory.Prestijli]    = 1.2m,
+        },
+        [LoanType.Education] = new()
+        {
+            [ScoreCategory.Kritik]       = 5.2m,
+            [ScoreCategory.GelisimeAcik] = 3.8m,
+            [ScoreCategory.Dengeli]      = 2.7m,
+            [ScoreCategory.Guvenli]      = 1.7m,
+            [ScoreCategory.Prestijli]    = 0.9m,
+        },
+    };
+
+    // Vade Faktörü Tablosu — claude.md §6A.
+    private static decimal TermFactor(int termMonths) => termMonths switch
+    {
+        <= 6  => -0.25m,
+        <= 12 =>  0.00m,
+        <= 18 => +0.08m,
+        <= 24 => +0.15m,
+        <= 36 => +0.28m,
+        <= 48 => +0.42m,
+        <= 60 => +0.58m,
+        _     => +0.75m   // 61-72 ay
+    };
+
+    // Meslek Bonusu/Penaltısı — claude.md §6A.
+    private static decimal ProfessionBonus(Customer customer)
+    {
+        decimal bonus = customer.ProfessionCategory switch
+        {
+            ProfessionCategory.Government   => -0.3m,
+            ProfessionCategory.Healthcare   => -0.2m,
+            ProfessionCategory.Technology   => -0.2m,
+            ProfessionCategory.Education    => -0.15m,
+            ProfessionCategory.Finance      => -0.1m,
+            ProfessionCategory.Commerce     => +0.2m,
+            ProfessionCategory.Construction => +0.2m,
+            ProfessionCategory.Seasonal     => +0.3m,
+            _                               => 0m
         };
 
-        // Vade uzadıkça belirsizlik artar → prim kademeli olarak yükselir.
-        decimal termPremium = termMonths switch
-        {
-            <= 6  => 0m,
-            <= 12 => 3m,
-            <= 24 => 7m,
-            <= 36 => 12m,
-            <= 60 => 18m,
-            <= 84 => 25m,
-            _     => 35m   // 85-120 ay
-        };
+        // Serbest çalışanlar ek risk taşır.
+        if (customer.EmploymentStatus == EmploymentStatus.Freelance)
+            bonus = Math.Max(bonus, 0.3m);
 
-        decimal incomeMultiple = customer.MonthlyIncome > 0
-            ? requestedAmount / customer.MonthlyIncome
-            : 0;
+        return bonus;
+    }
 
-        decimal amountPremium = incomeMultiple switch
-        {
-            <= 2m => 0m,
-            <= 3m => 1m,
-            _     => 2m
-        };
+    public decimal Calculate(int creditScore, LoanType loanType, int termMonths, Customer customer)
+    {
+        var scoreCategory = ScoreCategoryHelper.FromScore(creditScore);
 
-        decimal professionBonus = customer.ProfessionCategory == ProfessionCategory.Government ? 1m : 0m;
+        if (!BaseRates.TryGetValue(loanType, out var categoryRates))
+            categoryRates = BaseRates[LoanType.Personal];
 
-        return Math.Round(BaseRate + riskPremium + termPremium + amountPremium - professionBonus, 2);
+        decimal baseRate   = categoryRates[scoreCategory];
+        decimal termFactor = TermFactor(termMonths);
+        decimal adjusted   = baseRate * (1m + termFactor);
+        decimal final      = adjusted + ProfessionBonus(customer);
+
+        return Math.Round(Math.Max(0.1m, final), 2);
     }
 }
