@@ -25,6 +25,11 @@ public class CreateLoanRequestValidator : AbstractValidator<CreateLoanRequest>
             .When(x => x.IsBalloonPayment)
             .WithMessage("Balon ödeme için en az 6 aylık vade gereklidir.");
 
+        RuleFor(x => x.Term)
+            .LessThanOrEqualTo(36)
+            .When(x => x.IsBalloonPayment)
+            .WithMessage("Balon ödeme planı en fazla 36 aylık vade için oluşturulabilir.");
+
         RuleFor(x => x.LoanType)
             .Must(t => t == LoanType.Vehicle)
             .When(x => x.IsBalloonPayment)

@@ -12,12 +12,19 @@ namespace CreditCase.Infrastructure.Services;
 public class BalloonPaymentStrategy : IInstallmentPlanStrategy
 {
     private const decimal RegularPaymentRatio = 0.60m;
-    private const decimal MaxBalloonRatio = 0.50m;
+    // KKDF+BSMV (%20) brüt oran nedeniyle balon tutar net anaparanın %50'sini
+    // sistematik olarak aşar; %90 sınırı KKDF/BSMV dahil gerçekçi üst limiti ifade eder.
+    private const decimal MaxBalloonRatio = 0.90m;
+    private const int    MaxBalloonTerm   = 36;
 
     public bool SupportsBalloon => true;
 
     public List<Installment> Generate(decimal principalAmount, decimal rateAmount, int term, DateTime startDate)
     {
+        if (term > MaxBalloonTerm)
+            throw new BusinessRuleException(
+                $"Balon ödeme planı en fazla {MaxBalloonTerm} ay vade için oluşturulabilir.");
+
         decimal normalMonthly = StandardInstallmentStrategy.ComputeMonthly(principalAmount, rateAmount, term);
         decimal totalAmount = normalMonthly * term;
 
@@ -27,7 +34,7 @@ public class BalloonPaymentStrategy : IInstallmentPlanStrategy
         if (balloonAmount > principalAmount * MaxBalloonRatio)
             throw new BusinessRuleException(
                 $"Balon taksit tutarı, anaparanın {MaxBalloonRatio:P0}'ini aşmaktadır. " +
-                "Vadeyi uzatın veya kredi tutarını düşürün.");
+                "Vadeyi kısaltın veya kredi tutarını düşürün.");
 
         var installments = Enumerable.Range(1, term - 1)
             .Select(i => new Installment
