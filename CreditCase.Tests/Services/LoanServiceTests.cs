@@ -70,7 +70,7 @@ public class LoanServiceTests
             .Setup(s => s.Generate(It.IsAny<decimal>(), It.IsAny<decimal>(), It.IsAny<int>(), It.IsAny<DateTime>()))
             .Returns((decimal principal, decimal rate, int term, DateTime start) =>
             {
-                decimal r = rate / 100m / 12m;
+                decimal r = rate / 100m;
                 double factor = r > 0 ? Math.Pow(1 + (double)r, term) : 1;
                 decimal monthly = r > 0
                     ? Math.Round(principal * (decimal)(r * (decimal)factor / ((decimal)factor - 1)), 2)
@@ -112,9 +112,9 @@ public class LoanServiceTests
     [Fact]
     public async Task CreateAsync_CalculatesMonthlyAmountUsingServerRateAmount()
     {
-        // Vade oranı 3.0 (ratio), 12.000 TL, 12 ay — amortizasyon
-        // r = 3.0/100/12 = 0.0025; factor = (1.0025)^12 ≈ 1.03042
-        // monthly = 12000 × 0.0025 × 1.03042 / 0.03042 ≈ 1014.14 TL
+        // Vade oranı 3.0 (aylık %), 12.000 TL, 12 ay — amortizasyon
+        // r = 3.0/100 = 0.030; factor = (1.030)^12 ≈ 1.4258
+        // monthly = 12000 × 0.030 × 1.4258 / 0.4258 ≈ 1207 TL
         _interestCalcMock
             .Setup(s => s.Calculate(It.IsAny<int>(), It.IsAny<LoanType>(), It.IsAny<int>(), It.IsAny<Customer>()))
             .Returns(3.0m);

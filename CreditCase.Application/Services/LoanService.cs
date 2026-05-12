@@ -143,7 +143,7 @@ public class LoanService : ILoanService
         if (loan.Installments.Any())
             return loan.Installments.Sum(i => i.Amount);
 
-        decimal r = loan.RateAmount / 100m / 12m;
+        decimal r = loan.RateAmount / 100m;
         if (r == 0 || loan.Term <= 0) return loan.PrincipalAmount;
         double factor = Math.Pow(1 + (double)r, loan.Term);
         decimal monthly = loan.PrincipalAmount * ((decimal)r * (decimal)factor / ((decimal)factor - 1));

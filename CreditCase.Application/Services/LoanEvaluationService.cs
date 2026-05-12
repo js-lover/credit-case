@@ -168,12 +168,12 @@ public class LoanEvaluationService : ILoanEvaluationService
 
     /// <summary>
     /// Amortisasyon formülü: A = P × r(1+r)^n / [(1+r)^n - 1]
-    /// rateAmount ratio formatındadır (örn: 3.25 → yıllık %3.25).
+    /// rateAmount aylık yüzdedir (örn: 3.91 → aylık %3.91); r = rateAmount / 100.
     /// </summary>
     private static decimal CalculateMonthlyInstallment(decimal principal, decimal rateAmount, int termMonths)
     {
         if (termMonths <= 0 || principal <= 0) return 0;
-        decimal r = rateAmount / 100m / 12m;
+        decimal r = rateAmount / 100m;
         if (r == 0) return Math.Round(principal / termMonths, 2);
         double factor = Math.Pow(1 + (double)r, termMonths);
         return Math.Round(principal * (decimal)(r * (decimal)factor / ((decimal)factor - 1)), 2);

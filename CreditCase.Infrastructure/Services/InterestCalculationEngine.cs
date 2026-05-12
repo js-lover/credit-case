@@ -5,77 +5,80 @@ using CreditCase.Domain.Enums;
 namespace CreditCase.Infrastructure.Services;
 
 /// <summary>
-/// claude.md §6A Dinamik Vade Oranı Hesaplama:
-///   1. Kredi türü × kredi skoru kategorisi → temel vade oranı (12 ay referans)
-///   2. Vade süresine göre faktör uygulanır
+/// Aylık bazlı dinamik vade oranı hesaplama:
+///   1. Kredi türü × ScoreCategory → aylık temel oran (12 ay referans)
+///   2. Vade süresine göre çarpan uygulanır
 ///   3. Meslek bonusu/penaltısı eklenir
 ///
-/// Sonuç ratio formatındadır (örn: 3.25, 4.48); yüzde değildir (UI'de "%" kullanılmaz).
+/// Sonuç AYLIK yüzde olarak döner (örn: 3.91 → aylık %3.91).
+/// Amortisasyon formülünde r = rateAmount / 100 (doğrudan aylık oran).
+///
+/// Referans oranlar (Dengeli kategorisi, 12 ay): Personal=3.91, Vehicle=3.30, Education=2.85
 /// </summary>
 public class InterestCalculationEngine : IInterestCalculationService
 {
-    // Temel Vade Oranları — 12 ay vade için referans (Kredi Türü × ScoreCategory).
-    // claude.md §6A Kredi Türüne Göre Temel Vade Oranı tablosu.
+    // Temel Aylık Vade Oranları — 12 ay referans, Türkiye bankacılık standartları.
+    // Kullanıcı referans değerleri: PersonalLoan=3.91, VehicleLoan=3.30, EducationLoan=2.85 (Dengeli).
     private static readonly Dictionary<LoanType, Dictionary<ScoreCategory, decimal>> BaseRates = new()
     {
         [LoanType.Personal] = new()
         {
-            [ScoreCategory.Kritik]       = 6.8m,
-            [ScoreCategory.GelisimeAcik] = 5.2m,
-            [ScoreCategory.Dengeli]      = 4.0m,
-            [ScoreCategory.Guvenli]      = 3.0m,
-            [ScoreCategory.Prestijli]    = 2.0m,
+            [ScoreCategory.Kritik]       = 5.80m,
+            [ScoreCategory.GelisimeAcik] = 4.80m,
+            [ScoreCategory.Dengeli]      = 3.91m,
+            [ScoreCategory.Guvenli]      = 3.05m,
+            [ScoreCategory.Prestijli]    = 2.20m,
         },
         [LoanType.Vehicle] = new()
         {
-            [ScoreCategory.Kritik]       = 5.8m,
-            [ScoreCategory.GelisimeAcik] = 4.2m,
-            [ScoreCategory.Dengeli]      = 3.0m,
-            [ScoreCategory.Guvenli]      = 2.0m,
-            [ScoreCategory.Prestijli]    = 1.2m,
+            [ScoreCategory.Kritik]       = 5.10m,
+            [ScoreCategory.GelisimeAcik] = 4.15m,
+            [ScoreCategory.Dengeli]      = 3.30m,
+            [ScoreCategory.Guvenli]      = 2.55m,
+            [ScoreCategory.Prestijli]    = 1.80m,
         },
         [LoanType.Education] = new()
         {
-            [ScoreCategory.Kritik]       = 5.2m,
-            [ScoreCategory.GelisimeAcik] = 3.8m,
-            [ScoreCategory.Dengeli]      = 2.7m,
-            [ScoreCategory.Guvenli]      = 1.7m,
-            [ScoreCategory.Prestijli]    = 0.9m,
+            [ScoreCategory.Kritik]       = 4.50m,
+            [ScoreCategory.GelisimeAcik] = 3.60m,
+            [ScoreCategory.Dengeli]      = 2.85m,
+            [ScoreCategory.Guvenli]      = 2.20m,
+            [ScoreCategory.Prestijli]    = 1.55m,
         },
     };
 
-    // Vade Faktörü Tablosu — claude.md §6A.
+    // Vade Faktörü — aylık bazda küçük artış/azalış.
     private static decimal TermFactor(int termMonths) => termMonths switch
     {
-        <= 6  => -0.25m,
+        <= 6  => -0.08m,
         <= 12 =>  0.00m,
-        <= 18 => +0.08m,
-        <= 24 => +0.15m,
-        <= 36 => +0.28m,
-        <= 48 => +0.42m,
-        <= 60 => +0.58m,
-        _     => +0.75m   // 61-72 ay
+        <= 18 => +0.03m,
+        <= 24 => +0.06m,
+        <= 36 => +0.11m,
+        <= 48 => +0.17m,
+        <= 60 => +0.23m,
+        _     => +0.30m   // 61-72 ay
     };
 
-    // Meslek Bonusu/Penaltısı — claude.md §6A.
+    // Meslek Bonusu/Penaltısı — aylık yüzde puan.
     private static decimal ProfessionBonus(Customer customer)
     {
         decimal bonus = customer.ProfessionCategory switch
         {
-            ProfessionCategory.Government   => -0.3m,
-            ProfessionCategory.Healthcare   => -0.2m,
-            ProfessionCategory.Technology   => -0.2m,
-            ProfessionCategory.Education    => -0.15m,
-            ProfessionCategory.Finance      => -0.1m,
-            ProfessionCategory.Commerce     => +0.2m,
-            ProfessionCategory.Construction => +0.2m,
-            ProfessionCategory.Seasonal     => +0.3m,
+            ProfessionCategory.Government   => -0.20m,
+            ProfessionCategory.Healthcare   => -0.15m,
+            ProfessionCategory.Technology   => -0.15m,
+            ProfessionCategory.Education    => -0.10m,
+            ProfessionCategory.Finance      => -0.08m,
+            ProfessionCategory.Commerce     => +0.15m,
+            ProfessionCategory.Construction => +0.15m,
+            ProfessionCategory.Seasonal     => +0.25m,
             _                               => 0m
         };
 
         // Serbest çalışanlar ek risk taşır.
         if (customer.EmploymentStatus == EmploymentStatus.Freelance)
-            bonus = Math.Max(bonus, 0.3m);
+            bonus = Math.Max(bonus, 0.25m);
 
         return bonus;
     }

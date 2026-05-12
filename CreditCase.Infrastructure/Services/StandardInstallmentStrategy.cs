@@ -6,8 +6,7 @@ namespace CreditCase.Infrastructure.Services;
 
 /// <summary>
 /// Amortisasyon yöntemiyle eşit taksitli standart ödeme planı üretir.
-/// claude.md §6A Taksit Planı Üretimi:
-///   r = rateAmount / 100 / 12  (yıllık oran → aylık oran)
+///   r = rateAmount / 100  (rateAmount aylık yüzdedir, doğrudan aylık oran)
 ///   A = P × r(1+r)^n / [(1+r)^n - 1]
 /// </summary>
 public class StandardInstallmentStrategy : IInstallmentPlanStrategy
@@ -33,7 +32,7 @@ public class StandardInstallmentStrategy : IInstallmentPlanStrategy
     internal static decimal ComputeMonthly(decimal principal, decimal rateAmount, int term)
     {
         if (term <= 0 || principal <= 0) return 0m;
-        decimal r = rateAmount / 100m / 12m;
+        decimal r = rateAmount / 100m;
         if (r == 0m) return Math.Round(principal / term, 2);
         double factor = Math.Pow(1 + (double)r, term);
         return Math.Round(principal * (decimal)(r * (decimal)factor / ((decimal)factor - 1)), 2);
