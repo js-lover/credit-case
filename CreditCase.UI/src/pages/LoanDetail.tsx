@@ -11,7 +11,8 @@ import { InstallmentBadge, LoanStatusBadge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Spinner } from '../components/ui/Spinner';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate, formatTerm, formatPercentage } from '../utils/formatters';
+import { getLoanWarnings, validateInstallmentPlan } from '../utils/loanCalculations';
 
 export function LoanDetail() {
   const { id } = useParams<{ id: string }>();
@@ -66,18 +67,55 @@ export function LoanDetail() {
     .sort((a, b) => a.installmentNumber - b.installmentNumber);
   const nextPayableId = unpaidInstallments[0]?.id ?? null;
 
+  // Kredi başlangıç ve bitiş tarihlerini hesapla
+  const loanStartDate = new Date(loan.startDate);
+  const loanEndDate = new Date(loanStartDate);
+  loanEndDate.setMonth(loanEndDate.getMonth() + loan.term);
+
+  // Faiz ve faiz oranını hesapla
+  const totalInterest = loan.totalPayableAmount - loan.principalAmount;
+  const interestRate = loan.rateAmount; // Aylık oran
+
+  // Hesaplama hataları varsa bunu kontrol et
+  const validationResult = validateInstallmentPlan(loan);
+  const loanWarnings = getLoanWarnings(loan);
+
   return (
     <PageLayout
       title={`Kredi #${loan.id} — ${LOAN_TYPE_LABELS[loan.loanType]}`}
       action={<Button variant="secondary" onClick={() => navigate('/loans')}>← Geri</Button>}
     >
-      {/* Kredi özet kartları */}
+      {/* Kredi başlık kartı - tarihler ve durum */}
+      <Card className="mb-6 bg-linear-to-r from-blue-50 to-blue-100 border-blue-200">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-5">
+          <div>
+            <p className="text-xs text-blue-600 font-semibold">BAŞLANGIÇ TARİHİ</p>
+            <p className="text-lg font-bold text-blue-900 mt-1">{formatDate(loan.startDate)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-blue-600 font-semibold">BİTİŞ TARİHİ</p>
+            <p className="text-lg font-bold text-blue-900 mt-1">{formatDate(loanEndDate.toISOString())}</p>
+          </div>
+          <div>
+            <p className="text-xs text-blue-600 font-semibold">KREDİ DURUMU</p>
+            <p className={`text-lg font-bold mt-1 ${loan.status === 0 ? 'text-green-600' : 'text-gray-600'}`}>
+              {loan.status === 0 ? '✓ Aktif' : '○ Kapalı'}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-blue-600 font-semibold">VADE</p>
+            <p className="text-lg font-bold text-blue-900 mt-1">{formatTerm(loan.term)}</p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Kredi özet kartları - finansal detaylar */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="Ana Para" value={formatCurrency(loan.principalAmount)} />
         <StatCard
           label="Toplam Ödenecek"
           value={formatCurrency(loan.totalPayableAmount)}
-          sub={`Faiz: ${formatCurrency(loan.totalPayableAmount - loan.principalAmount)}`}
+          sub={`Faiz: ${formatCurrency(totalInterest)}`}
           accent="warning"
         />
         <StatCard
@@ -86,8 +124,58 @@ export function LoanDetail() {
           sub={`${paidCount} / ${loan.term} taksit`}
           accent={overdueCount > 0 ? 'danger' : 'success'}
         />
-        <StatCard label="Durum" value={loan.status === 0 ? 'Aktif' : 'Kapalı'} sub={overdueCount > 0 ? `${overdueCount} gecikmiş` : undefined} />
+        <StatCard 
+          label="Vade Oranı" 
+          value={formatPercentage(interestRate)} 
+          sub="Aylık" 
+          accent="default"
+        />
       </div>
+
+      {/* Ek kredi detayları */}
+      <Card className="mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-5">
+          <div className="border-r border-gray-200 pr-4">
+            <p className="text-xs text-gray-500 font-semibold">TOPLAM FAİZ</p>
+            <p className="text-xl font-bold text-gray-900 mt-1">{formatCurrency(totalInterest)}</p>
+          </div>
+          <div className="border-r border-gray-200 pr-4">
+            <p className="text-xs text-gray-500 font-semibold">GECİKMİŞ TRANŞ</p>
+            <p className={`text-xl font-bold mt-1 ${overdueCount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              {overdueCount === 0 ? '—' : `${overdueCount} taksit`}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 font-semibold">ÖDEMENİN %'Sİ</p>
+            <p className="text-xl font-bold text-gray-900 mt-1">
+              {loan.term > 0 ? Math.round((paidCount / loan.term) * 100) : 0}%
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Uyarılar bölümü */}
+      {(loanWarnings.length > 0 || !validationResult.valid) && (
+        <Card className="mb-6 border-amber-200 bg-amber-50">
+          <div className="p-5">
+            <h3 className="font-semibold text-amber-900 mb-3">⚠️ Önemli Bilgiler</h3>
+            <ul className="space-y-2">
+              {loanWarnings.map((warning, idx) => (
+                <li key={idx} className="text-sm text-amber-800 flex items-start">
+                  <span className="mr-2">•</span>
+                  <span>{warning}</span>
+                </li>
+              ))}
+              {validationResult.errors.map((error, idx) => (
+                <li key={`error-${idx}`} className="text-sm text-red-700 flex items-start font-medium">
+                  <span className="mr-2">✗</span>
+                  <span>{error}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Card>
+      )}
 
       {/* Taksit planı */}
       <Card>
