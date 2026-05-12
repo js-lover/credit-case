@@ -5,7 +5,7 @@ import { loanService } from '../services/api/loanService';
 import { customerService } from '../services/api/customerService';
 import { loanEvaluationService } from '../services/api/loanEvaluationService';
 import type { LoanResponse, CustomerResponse, CreateLoanRequest, LoanEvaluationResponse } from '../types';
-import { LoanType, RiskCategory, LOAN_TYPE_LABELS, RISK_CATEGORY_LABELS, ScoreCategory, SCORE_CATEGORY_LABELS } from '../types';
+import { LoanType, RiskCategory, LOAN_TYPE_LABELS, RISK_CATEGORY_LABELS, SCORE_CATEGORY_LABELS } from '../types';
 import { PageLayout } from '../components/layout/PageLayout';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
