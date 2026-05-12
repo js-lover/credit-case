@@ -5,7 +5,7 @@ import { loanService } from '../services/api/loanService';
 import { customerService } from '../services/api/customerService';
 import { loanEvaluationService } from '../services/api/loanEvaluationService';
 import type { LoanResponse, CustomerResponse, CreateLoanRequest, LoanEvaluationResponse } from '../types';
-import { LoanType, RiskCategory, LOAN_TYPE_LABELS, RISK_CATEGORY_LABELS } from '../types';
+import { LoanType, RiskCategory, LOAN_TYPE_LABELS, RISK_CATEGORY_LABELS, ScoreCategory, SCORE_CATEGORY_LABELS } from '../types';
 import { PageLayout } from '../components/layout/PageLayout';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -26,6 +26,18 @@ const RISK_COLORS: Record<RiskCategory, string> = {
   [RiskCategory.High]:     'bg-orange-100 text-orange-700',
   [RiskCategory.VeryHigh]: 'bg-red-100 text-red-700',
 };
+
+// ── Hızlı tahmin hesabı (KKDF %15 + BSMV %5 dahil) ──────────────────────────
+
+function calcLiveEstimate(principal: number, netRate: number, term: number) {
+  const grossRate = netRate * (1 + 0.15 + 0.05);
+  const r = grossRate / 100;
+  if (r === 0 || term <= 0 || principal <= 0) return null;
+  const factor = Math.pow(1 + r, term);
+  const monthly = Math.round((principal * r * factor / (factor - 1)) * 100) / 100;
+  const total   = Math.round(monthly * term * 100) / 100;
+  return { monthly, total, grossRate: Math.round(grossRate * 10000) / 10000 };
+}
 
 // ── Değerlendirme sonucu hücresi ─────────────────────────────────────────────
 
@@ -61,6 +73,8 @@ function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
   const [eligibilityLoading, setEligibilityLoading] = useState(false);
   const [evaluation, setEvaluation] = useState<LoanEvaluationResponse | null>(null);
   const [evaluating, setEvaluating] = useState(false);
+  const [liveRate, setLiveRate] = useState<number | null>(null);
+  const [showPlan, setShowPlan] = useState(false);
 
   // Müşteri seçilince maksimum uygunluğu getir
   useEffect(() => {
@@ -76,7 +90,7 @@ function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
     return () => { cancelled = true; };
   }, [form.customerId]);
 
-  // Form değişince önceki değerlendirmeyi sıfırla
+  // Form değişince önceki değerlendirmeyi sıfırla (liveRate korunur)
   const handleChange = (field: keyof CreateLoanRequest, value: unknown) => {
     setForm(prev => {
       const next = { ...prev, [field]: value } as CreateLoanRequest;
@@ -86,6 +100,7 @@ function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
       return next;
     });
     setEvaluation(null);
+    setShowPlan(false);
   };
 
   // Değerlendirme çalıştır
@@ -99,7 +114,10 @@ function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
         requestedTerm: form.term,
       });
       setEvaluation(result);
-      if (!result.isApproved) {
+      if (result.isApproved) {
+        setLiveRate(result.approvedRateAmount);
+        setShowPlan(false);
+      } else {
         toast.error(result.rejectionReason ?? 'Kredi başvurusu reddedildi.');
       }
     } finally {
@@ -226,15 +244,30 @@ function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
         </label>
       )}
 
+      {/* Hızlı tahmin — evaluation yokken ama liveRate biliniyorsa gösterilir */}
+      {!evaluation && liveRate && (() => {
+        const est = calcLiveEstimate(form.principalAmount, liveRate, form.term);
+        if (!est) return null;
+        return (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-600 mb-2">
+              Hızlı Tahmin — Vade Oranı: {liveRate} (Net) / {est.grossRate} (Brüt)
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <EvalCell label="Aylık Taksit" value={formatCurrency(est.monthly)} highlight />
+              <EvalCell label="Toplam Ödenecek" value={formatCurrency(est.total)} highlight />
+            </div>
+            <p className="mt-1.5 text-[10px] text-[#64748B]">KKDF (%15) ve BSMV (%5) dahil. Kesin sonuç için "Değerlendir"e basın.</p>
+          </div>
+        );
+      })()}
+
       {/* Değerlendirme sonucu */}
       {evaluation && (() => {
-        // Finansal hesaplar onaylanan tutar (approvedAmount) üzerinden yapılır.
-        // monthlyInstallmentEstimate zaten approvedAmount bazlı döner.
         const base = evaluation.isApproved ? evaluation.approvedAmount : form.principalAmount;
-        const totalPayable = Math.round(evaluation.monthlyInstallmentEstimate * form.term * 100) / 100;
+        const totalPayable  = Math.round(evaluation.monthlyInstallmentEstimate * form.term * 100) / 100;
         const totalInterest = Math.round((totalPayable - base) * 100) / 100;
-        const amountCapped = evaluation.isApproved && evaluation.approvedAmount < form.principalAmount;
-
+        const amountCapped  = evaluation.isApproved && evaluation.approvedAmount < form.principalAmount;
         const endDate = (() => {
           const d = new Date(form.startDate);
           d.setMonth(d.getMonth() + form.term);
@@ -250,9 +283,14 @@ function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
           <div className={`rounded-lg border text-sm overflow-hidden ${evaluation.isApproved ? 'border-green-200' : 'border-red-200'}`}>
             {/* Başlık */}
             <div className={`px-4 py-2.5 flex items-center justify-between ${evaluation.isApproved ? 'bg-green-100' : 'bg-red-100'}`}>
-              <span className={`font-bold ${evaluation.isApproved ? 'text-green-700' : 'text-red-700'}`}>
-                {evaluation.isApproved ? 'Kredi Onaylandı' : 'Kredi Reddedildi'}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`font-bold ${evaluation.isApproved ? 'text-green-700' : 'text-red-700'}`}>
+                  {evaluation.isApproved ? '✓ Kredi Onaylandı' : '✗ Kredi Reddedildi'}
+                </span>
+                <span className="text-[10px] text-[#64748B]">
+                  {SCORE_CATEGORY_LABELS[evaluation.creditScoreCategory]} ({evaluation.creditScore})
+                </span>
+              </div>
               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${RISK_COLORS[evaluation.riskLevel]}`}>
                 {RISK_CATEGORY_LABELS[evaluation.riskLevel]}
               </span>
@@ -276,12 +314,12 @@ function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
 
               {/* Finansal özet */}
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B] mb-1.5">Finansal Özet</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B] mb-1.5">Finansal Özet (KKDF+BSMV Dahil)</p>
                 <div className="grid grid-cols-2 gap-2">
                   <EvalCell label="Onaylanan Tutar" value={formatCurrency(base)} />
                   <EvalCell label="Toplam Ödenecek" value={formatCurrency(totalPayable)} highlight={evaluation.isApproved} />
                   <EvalCell label="Aylık Taksit" value={formatCurrency(evaluation.monthlyInstallmentEstimate)} highlight={evaluation.isApproved} />
-                  <EvalCell label="Toplam Faiz" value={formatCurrency(totalInterest)} />
+                  <EvalCell label="Toplam Ek Ödeme" value={formatCurrency(totalInterest)} />
                 </div>
               </div>
 
@@ -295,15 +333,61 @@ function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
                 </div>
               </div>
 
-              {/* Oran & skor */}
+              {/* Oran & maliyet */}
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B] mb-1.5">Değerlendirme</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <EvalCell label="Vade Oranı" value={evaluation.isApproved ? `${evaluation.approvedRateAmount}` : '—'} />
-                  <EvalCell label="Kredi Skoru" value={`${evaluation.creditScore}`} />
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B] mb-1.5">Faiz & Maliyet</p>
+                <div className="grid grid-cols-4 gap-2">
+                  <EvalCell label="Net Oran (Aylık)" value={evaluation.isApproved ? `${evaluation.approvedRateAmount}` : '—'} />
+                  <EvalCell label="Brüt Oran (Aylık)" value={evaluation.isApproved ? `${evaluation.grossRateAmount}` : '—'} />
+                  <EvalCell label="YMO (Yıllık)" value={evaluation.isApproved ? `%${evaluation.annualCostRate.toFixed(2)}` : '—'} highlight={evaluation.isApproved} />
                   <EvalCell label="Borç/Gelir" value={`%${(evaluation.debtToIncomeRatio * 100).toFixed(1)}`} />
                 </div>
               </div>
+
+              {/* Ödeme planı accordion */}
+              {evaluation.isApproved && evaluation.installmentPlan.length > 0 && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPlan(p => !p)}
+                    className="w-full flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide text-[#64748B] py-1 hover:text-[#1B4FD8] transition-colors"
+                  >
+                    <span>Ödeme Planını {showPlan ? 'Gizle' : 'Göster'} ({evaluation.installmentPlan.length} taksit)</span>
+                    <span>{showPlan ? '▲' : '▼'}</span>
+                  </button>
+
+                  {showPlan && (
+                    <div className="overflow-x-auto rounded border border-white/60 mt-1">
+                      <table className="w-full text-[11px]">
+                        <thead>
+                          <tr className="bg-white/60 text-[#64748B] border-b border-white/40">
+                            <th className="px-2 py-1.5 text-left font-medium">#</th>
+                            <th className="px-2 py-1.5 text-right font-medium">Anapara</th>
+                            <th className="px-2 py-1.5 text-right font-medium">Faiz</th>
+                            <th className="px-2 py-1.5 text-right font-medium text-amber-700">KKDF</th>
+                            <th className="px-2 py-1.5 text-right font-medium text-amber-700">BSMV</th>
+                            <th className="px-2 py-1.5 text-right font-medium text-[#1B4FD8]">Toplam</th>
+                            <th className="px-2 py-1.5 text-right font-medium">Kalan</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {evaluation.installmentPlan.map(row => (
+                            <tr key={row.installmentNumber} className="border-t border-white/30 hover:bg-white/30">
+                              <td className="px-2 py-1 text-[#64748B] font-mono">{row.installmentNumber}</td>
+                              <td className="px-2 py-1 text-right">{formatCurrency(row.principalPayment)}</td>
+                              <td className="px-2 py-1 text-right">{formatCurrency(row.netInterest)}</td>
+                              <td className="px-2 py-1 text-right text-amber-700">{formatCurrency(row.kkdf)}</td>
+                              <td className="px-2 py-1 text-right text-amber-700">{formatCurrency(row.bsmv)}</td>
+                              <td className="px-2 py-1 text-right font-semibold text-[#1B4FD8]">{formatCurrency(row.totalPayment)}</td>
+                              <td className="px-2 py-1 text-right text-[#64748B]">{formatCurrency(row.remainingBalance)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         );

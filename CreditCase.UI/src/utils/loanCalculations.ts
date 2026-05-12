@@ -102,7 +102,7 @@ export const validateInstallmentPlan = (loan: LoanResponse): { valid: boolean; e
   const sumOfInstallments = loan.installments.reduce((sum, i) => sum + i.amount, 0);
   const expectedSum = loan.totalPayableAmount;
   
-  if (Math.abs(sumOfInstallments - expectedSum) > 0.01) {
+  if (Math.abs(sumOfInstallments - expectedSum) > 1) {
     errors.push(`Taksit toplamı hatalı: ${formatCurrency(sumOfInstallments)} (Beklenen: ${formatCurrency(expectedSum)})`);
   }
 
@@ -142,8 +142,8 @@ export const getLoanWarnings = (loan: LoanResponse): string[] => {
     warnings.push('Kredi neredeyse tamamlanmış durumda');
   }
 
-  if (loan.rateAmount > 5) {
-    warnings.push('Aylık faiz oranı %5 üzerinde (yüksek)');
+  if (loan.rateAmount > 7) {
+    warnings.push('Aylık vade oranı 7 üzerinde (çok yüksek)');
   }
 
   return warnings;

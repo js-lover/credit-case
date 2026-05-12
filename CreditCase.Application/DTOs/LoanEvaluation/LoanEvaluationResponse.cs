@@ -30,6 +30,14 @@ public class LoanEvaluationResponse
     public decimal DebtToIncomeRatio { get; set; }
     public decimal MonthlyInstallmentEstimate { get; set; }
 
+    // ── Vergi ve maliyet göstergeleri ────────────────────────────────────────────
+    /// <summary>KKDF+BSMV dahil brüt aylık oran (örn: 4.692).</summary>
+    public decimal GrossRateAmount { get; set; }
+    /// <summary>YMO — Yıllık Maliyet Oranı, brüt efektif yıllık oran (%).</summary>
+    public decimal AnnualCostRate { get; set; }
+    /// <summary>Onaylı kredinin taksit bazlı amortisman tablosu (boş liste = reddedildi).</summary>
+    public List<InstallmentPlanRow> InstallmentPlan { get; set; } = [];
+
     public string? RejectionReason { get; set; }
     public DateTime EvaluationDate { get; set; }
     public DateTime ExpirationDate { get; set; }

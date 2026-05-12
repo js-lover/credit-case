@@ -164,19 +164,77 @@ public class LoanEvaluationService : ILoanEvaluationService
         return await EvaluateAsync(request);
     }
 
+    // ── Vergi sabitleri ───────────────────────────────────────────────────────────
+    // Taşıt ve ihtiyaç kredisi standartları (mortgage'da KKDF=0).
+    private const decimal KkdfRate = 0.15m;
+    private const decimal BsmvRate = 0.05m;
+
     // ── Yardımcı metotlar ────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Amortisasyon formülü: A = P × r(1+r)^n / [(1+r)^n - 1]
-    /// rateAmount aylık yüzdedir (örn: 3.91 → aylık %3.91); r = rateAmount / 100.
+    /// Amortisasyon formülü: A = P × r_brüt(1+r_brüt)^n / [(1+r_brüt)^n - 1]
+    /// netRateAmount aylık net yüzdedir (örn: 3.91); brüt oran = net × (1 + KKDF + BSMV).
     /// </summary>
-    private static decimal CalculateMonthlyInstallment(decimal principal, decimal rateAmount, int termMonths)
+    private static decimal CalculateMonthlyInstallment(decimal principal, decimal netRateAmount, int termMonths)
     {
         if (termMonths <= 0 || principal <= 0) return 0;
-        decimal r = rateAmount / 100m;
+        decimal grossRate = netRateAmount * (1 + KkdfRate + BsmvRate);
+        decimal r = grossRate / 100m;
         if (r == 0) return Math.Round(principal / termMonths, 2);
         double factor = Math.Pow(1 + (double)r, termMonths);
         return Math.Round(principal * (decimal)(r * (decimal)factor / ((decimal)factor - 1)), 2);
+    }
+
+    /// <summary>
+    /// Her taksit için Anapara / Net Faiz / KKDF / BSMV dökümünü üretir.
+    /// </summary>
+    private static List<InstallmentPlanRow> GenerateAmortizationTable(
+        decimal principal, decimal netRateAmount, int termMonths)
+    {
+        decimal grossRate = netRateAmount * (1 + KkdfRate + BsmvRate);
+        decimal r = grossRate / 100m;
+        decimal monthlyPayment = CalculateMonthlyInstallment(principal, netRateAmount, termMonths);
+
+        var rows = new List<InstallmentPlanRow>(termMonths);
+        decimal remaining = principal;
+
+        for (int i = 1; i <= termMonths; i++)
+        {
+            decimal grossInterest = Math.Round(remaining * r, 2);
+            decimal netInterest   = Math.Round(grossInterest / (1 + KkdfRate + BsmvRate), 2);
+            decimal kkdf          = Math.Round(netInterest * KkdfRate, 2);
+            decimal bsmv          = Math.Round(netInterest * BsmvRate, 2);
+
+            decimal principalPayment;
+            decimal totalPayment;
+
+            if (i == termMonths)
+            {
+                // Son taksitte kalan bakiye sıfırlanır
+                principalPayment = remaining;
+                totalPayment     = principalPayment + grossInterest;
+            }
+            else
+            {
+                principalPayment = Math.Round(monthlyPayment - grossInterest, 2);
+                totalPayment     = monthlyPayment;
+            }
+
+            remaining = Math.Max(0, Math.Round(remaining - principalPayment, 2));
+
+            rows.Add(new InstallmentPlanRow
+            {
+                InstallmentNumber = i,
+                PrincipalPayment  = principalPayment,
+                NetInterest       = netInterest,
+                Kkdf              = kkdf,
+                Bsmv              = bsmv,
+                TotalPayment      = totalPayment,
+                RemainingBalance  = remaining,
+            });
+        }
+
+        return rows;
     }
 
     private static decimal CalculateDebtToIncomeRatio(Customer customer, decimal requestedAmount, int termMonths)
@@ -194,26 +252,48 @@ public class LoanEvaluationService : ILoanEvaluationService
     }
 
     private static LoanEvaluationResponse MapToResponse(
-        LoanEvaluationResult e, Customer customer, ScoreCategory scoreCategory) => new()
+        LoanEvaluationResult e, Customer customer, ScoreCategory scoreCategory)
     {
-        Id = e.Id,
-        CustomerId = e.CustomerId,
-        CustomerFullName = $"{customer.FirstName} {customer.LastName}",
-        RequestedAmount = e.RequestedAmount,
-        RequestedTerm = e.RequestedTerm,
-        RequestedLoanType = e.RequestedLoanType,
-        IsApproved = e.IsApproved,
-        ApprovedAmount = e.ApprovedAmount,
-        MaximumAmount = e.MaximumAmount,
-        MaximumTerm = e.MaximumTerm,
-        ApprovedRateAmount = e.ApprovedRateAmount,
-        RiskLevel = e.RiskLevel,
-        CreditScoreCategory = scoreCategory,
-        CreditScore = e.CreditScore,
-        DebtToIncomeRatio = e.DebtToIncomeRatio,
-        MonthlyInstallmentEstimate = e.MonthlyInstallmentEstimate,
-        RejectionReason = e.RejectionReason,
-        EvaluationDate = e.EvaluationDate,
-        ExpirationDate = e.ExpirationDate
-    };
+        // Vergi türevli alanlar yalnızca onaylı değerlendirmelerde hesaplanır
+        decimal grossRate      = 0;
+        decimal annualCostRate = 0;
+        List<InstallmentPlanRow> plan = [];
+
+        if (e.IsApproved && e.ApprovedRateAmount > 0 && e.ApprovedAmount > 0)
+        {
+            int effectiveTerm = Math.Min(e.RequestedTerm, ScoreCategoryHelper.MaxTermMonths(scoreCategory));
+
+            grossRate = Math.Round(e.ApprovedRateAmount * (1 + KkdfRate + BsmvRate), 4);
+            double rGross = (double)(grossRate / 100m);
+            annualCostRate = Math.Round((decimal)(Math.Pow(1 + rGross, 12) - 1) * 100, 2);
+
+            plan = GenerateAmortizationTable(e.ApprovedAmount, e.ApprovedRateAmount, effectiveTerm);
+        }
+
+        return new LoanEvaluationResponse
+        {
+            Id = e.Id,
+            CustomerId = e.CustomerId,
+            CustomerFullName = $"{customer.FirstName} {customer.LastName}",
+            RequestedAmount = e.RequestedAmount,
+            RequestedTerm = e.RequestedTerm,
+            RequestedLoanType = e.RequestedLoanType,
+            IsApproved = e.IsApproved,
+            ApprovedAmount = e.ApprovedAmount,
+            MaximumAmount = e.MaximumAmount,
+            MaximumTerm = e.MaximumTerm,
+            ApprovedRateAmount = e.ApprovedRateAmount,
+            RiskLevel = e.RiskLevel,
+            CreditScoreCategory = scoreCategory,
+            CreditScore = e.CreditScore,
+            DebtToIncomeRatio = e.DebtToIncomeRatio,
+            MonthlyInstallmentEstimate = e.MonthlyInstallmentEstimate,
+            GrossRateAmount = grossRate,
+            AnnualCostRate = annualCostRate,
+            InstallmentPlan = plan,
+            RejectionReason = e.RejectionReason,
+            EvaluationDate = e.EvaluationDate,
+            ExpirationDate = e.ExpirationDate,
+        };
+    }
 }

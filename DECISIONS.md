@@ -76,14 +76,15 @@ MeslekBonusu : Kamu=−0.30, Sağlık/Teknoloji=−0.20, Mevsimlik=+0.30
 
 **Bileşen 2 — Taksit Hesaplama (`StandardInstallmentStrategy`):**
 
-Vade oranı belirlendikten sonra taksit planı **amortisasyon (azalan bakiye)** formülüyle üretilir:
+Vade oranı belirlendikten sonra taksit planı **amortisasyon (azalan bakiye)** formülüyle üretilir. Hesaplamada KKDF (%15) ve BSMV (%5) vergiler brüt orana dahil edilir (bkz. K-22):
 
 ```
-r = rateAmount / 100 / 12       (yıllık ratio → aylık oran)
+grossRate = rateAmount × (1 + 0.15 + 0.05)   // KKDF + BSMV dahil brüt oran
+r = grossRate / 100                            // aylık faiz oranı (ondalık)
 A = P × r(1+r)^n / [(1+r)^n − 1]
 ```
 
-**Gerekçe:** Düz faiz (flat-rate) başlangıçta kullanılmıştı; ancak projenin spec'inde (claude.md §6A) amortisasyon formülü açıkça belirtilmiş ve örnek hesaplamalar bu yöntemle örtüşmektedir. Amortisasyon, azalan anaparayı daha gerçekçi modeller ve bankacılık endüstrisinin fiilen kullandığı yöntemdir. Vade oranı ratio formatına geçiş ise `%` kullanımının kaldırılması ve UI'de `3.25`, `4.48` biçiminde gösterim anlamına gelir.
+**Gerekçe:** Düz faiz (flat-rate) başlangıçta kullanılmıştı; ancak projenin spec'inde (claude.md §6A) amortisasyon formülü açıkça belirtilmiş ve örnek hesaplamalar bu yöntemle örtüşmektedir. Amortisasyon, azalan anaparayı daha gerçekçi modeller ve bankacılık endüstrisinin fiilen kullandığı yöntemdir. `rateAmount` aylık net oran olduğundan `/12` bölme işlemi gerekmez; yıllık bir oranı aylığa çevirmek söz konusu değildir.
 
 ---
 
@@ -456,6 +457,43 @@ bool isOnTime = installment.DueDate.Date >= DateTime.UtcNow.Date;
 int delta = isOnTime ? +5 : -10;
 customer.CreditScoreBonus = Math.Clamp(customer.CreditScoreBonus + delta, -200, +200);
 ```
+
+---
+
+### K-22 · KKDF ve BSMV'nin Brüt Orana Dahil Edilmesi
+
+**Karar:** Tüm taksit hesaplamalarında (`LoanEvaluationService`, `StandardInstallmentStrategy`, `LoanService.ComputeTotalPayable`) aylık net vade oranına KKDF (%15) ve BSMV (%5) vergiler eklenerek brüt oran kullanılır.
+
+```
+brüt oran = net oran × (1 + 0.15 + 0.05) = net oran × 1.20
+```
+
+Her taksit satırı aşağıdaki bileşenlere ayrıştırılır:
+
+```
+Brüt Faiz   = Kalan Bakiye × (brüt oran / 100)
+Net Faiz    = Brüt Faiz / 1.20
+KKDF        = Net Faiz × 0.15
+BSMV        = Net Faiz × 0.05
+Anapara     = Taksit - Brüt Faiz
+```
+
+UI'de hem `LoanEvaluationService`'in ürettiği amortisman önizleme tablosu hem de `LoanDetail` sayfasındaki gerçek taksit tablosu bu dökümü gösterir.
+
+YMO (Yıllık Maliyet Oranı) brüt aylık oranın bileşik yıllık karşılığı olarak hesaplanır:
+
+```
+YMO = ((1 + brüt oran / 100)^12 − 1) × 100
+```
+
+**Gerekçe:** BDDK düzenlemelerine göre ihtiyaç ve taşıt kredilerinde KKDF (%15) ve BSMV (%5) müşterinin ödediği taksit içinde yer alır. Net oranla hesaplanmış taksit bu vergileri dışarıda bırakır ve müşteriye yanlış (düşük) taksit tutarı gösterir. Brüt oran kullanımı değerlendirme tahminini (evaluation) ile gerçek taksit miktarını (installment) tutarlı kılar; UI'deki vergi dökümü şeffaflık sağlar.
+
+**Etkilenen dosyalar:**
+- `CreditCase.Infrastructure/Services/StandardInstallmentStrategy.cs`
+- `CreditCase.Application/Services/LoanEvaluationService.cs`
+- `CreditCase.Application/Services/LoanService.cs`
+- `CreditCase.UI/src/pages/LoanDetail.tsx` (frontend hesaplama)
+- `CreditCase.UI/src/pages/Loans.tsx` (değerlendirme paneli)
 
 ---
 

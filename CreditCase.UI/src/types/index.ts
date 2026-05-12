@@ -161,6 +161,16 @@ export interface LoanApplicationRequest {
   requestedTerm: number;
 }
 
+export interface InstallmentPlanRow {
+  installmentNumber: number;
+  principalPayment: number;
+  netInterest: number;
+  kkdf: number;
+  bsmv: number;
+  totalPayment: number;
+  remainingBalance: number;
+}
+
 export interface LoanEvaluationResponse {
   id: number;
   customerId: number;
@@ -178,6 +188,9 @@ export interface LoanEvaluationResponse {
   creditScore: number;
   debtToIncomeRatio: number;
   monthlyInstallmentEstimate: number;
+  grossRateAmount: number;
+  annualCostRate: number;
+  installmentPlan: InstallmentPlanRow[];
   rejectionReason: string | null;
   evaluationDate: string;
   expirationDate: string;

@@ -4,13 +4,14 @@ import { customerService } from '../services/api/customerService';
 import { loanService } from '../services/api/loanService';
 import { loanEvaluationService } from '../services/api/loanEvaluationService';
 import type {
-  CustomerSummaryResponse, LoanResponse,
+  CustomerSummaryResponse, CustomerResponse, LoanResponse,
   LoanEvaluationResponse, LoanApplicationRequest,
 } from '../types';
 import {
   LoanStatus, LoanType, RiskCategory,
   LOAN_TYPE_LABELS, RISK_CATEGORY_LABELS,
   SCORE_CATEGORY_LABELS, SCORE_CATEGORY_COLORS,
+  PROFESSION_LABELS, EMPLOYMENT_STATUS_LABELS,
 } from '../types';
 
 const TERM_OPTIONS = [6, 12, 18, 24, 36, 48, 60, 72];
@@ -184,6 +185,7 @@ export function CustomerDetail() {
   const customerId = Number(id);
 
   const [summary, setSummary] = useState<CustomerSummaryResponse | null>(null);
+  const [customer, setCustomer] = useState<CustomerResponse | null>(null);
   const [loans, setLoans] = useState<LoanResponse[]>([]);
   const [evaluations, setEvaluations] = useState<LoanEvaluationResponse[]>([]);
   const [creditProfile, setCreditProfile] = useState<LoanEvaluationResponse | null>(null);
@@ -194,12 +196,14 @@ export function CustomerDetail() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [s, all, evals] = await Promise.all([
+        const [s, all, evals, cust] = await Promise.all([
           customerService.getSummary(customerId),
           loanService.getAll(),
           loanEvaluationService.getByCustomer(customerId),
+          customerService.getById(customerId),
         ]);
         setSummary(s);
+        setCustomer(cust);
         setLoans(all.filter(l => l.customerId === customerId));
         setEvaluations(evals);
 
@@ -237,6 +241,54 @@ export function CustomerDetail() {
         </div>
       }
     >
+      {/* Kişisel bilgiler kartı */}
+      {customer && (() => {
+        const age = Math.floor((Date.now() - new Date(customer.dateOfBirth).getTime()) / (365.25 * 24 * 3600 * 1000));
+        return (
+          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm px-5 py-4 mb-4">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B] mb-3">Kişisel Bilgiler</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-3">
+              <div>
+                <p className="text-[10px] text-[#64748B]">TC Kimlik</p>
+                <p className="text-sm font-semibold text-[#0F172A] mt-0.5">{customer.identityNumber}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[#64748B]">Doğum Tarihi</p>
+                <p className="text-sm font-semibold text-[#0F172A] mt-0.5">{formatDate(customer.dateOfBirth)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[#64748B]">Yaş</p>
+                <p className="text-sm font-semibold text-[#0F172A] mt-0.5">{age}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[#64748B]">Meslek</p>
+                <p className="text-sm font-semibold text-[#0F172A] mt-0.5">{PROFESSION_LABELS[customer.professionCategory]}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[#64748B]">İstihdam</p>
+                <p className="text-sm font-semibold text-[#0F172A] mt-0.5">{EMPLOYMENT_STATUS_LABELS[customer.employmentStatus]}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[#64748B]">Aylık Gelir</p>
+                <p className="text-sm font-semibold text-[#1B4FD8] mt-0.5">{formatCurrency(customer.monthlyIncome)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[#64748B]">E-posta</p>
+                <p className="text-sm font-medium text-[#0F172A] mt-0.5">{customer.email}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[#64748B]">Telefon</p>
+                <p className="text-sm font-medium text-[#0F172A] mt-0.5">{customer.phoneNumber}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[#64748B]">Kayıt Tarihi</p>
+                <p className="text-sm font-medium text-[#0F172A] mt-0.5">{formatDate(customer.createdAt)}</p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Borç özeti kartları */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <StatCard label="Toplam Kredi" value={summary.totalLoans} sub={`${activeLoans} aktif`} />

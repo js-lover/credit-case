@@ -350,3 +350,114 @@ Uygulama üretim ortamı için hazırdır:
 **Durum**: ✅ TAMAMLANDI  
 **Kalite**: ✅ ONAYLANDI  
 **Üretim**: ✅ HAZIR
+
+---
+
+## Güncelleme — Türkiye Bankacılık Standartları & UI İyileştirmeleri
+
+### Değişiklik Özeti
+
+Bu güncellemede üç ana alan ele alındı:
+
+1. **KKDF/BSMV Entegrasyonu (Backend + Frontend)**
+2. **Gerçekçi Faiz Oranı Sistemi**
+3. **UI Ekran Geliştirmeleri (LoanDetail, CustomerDetail)**
+
+---
+
+### 1. Türkiye Bankacılık Standartları — KKDF & BSMV
+
+Taksit hesaplamalarına Kaynak Kullanımını Destekleme Fonu (%15) ve Banka Sigorta Muameleleri Vergisi (%5) dahil edildi.
+
+**Hesaplama değişikliği:**
+```
+Eski: r = rateAmount / 100
+Yeni: grossRate = rateAmount × 1.20
+      r = grossRate / 100
+```
+
+**Etkilenen backend dosyaları:**
+- `StandardInstallmentStrategy.cs` — taksit üretimi brüt oranla yapılıyor
+- `LoanEvaluationService.cs` — değerlendirme tahmini + amortisman tablosu brüt oranla
+- `LoanService.cs` — toplam ödenecek hesabı brüt oranla
+
+**Yeni DTO:** `InstallmentPlanRow` — her taksit satırı için Anapara / Net Faiz / KKDF / BSMV / Toplam / Kalan Bakiye alanlarını taşır.
+
+**LoanEvaluationResponse'a eklenen alanlar:**
+| Alan | Açıklama |
+|------|----------|
+| `GrossRateAmount` | Net oran × 1.20 (KKDF+BSMV dahil aylık oran) |
+| `AnnualCostRate` | YMO — Yıllık Maliyet Oranı (%) |
+| `InstallmentPlan` | Taksit bazlı vergi dökümü listesi |
+
+**Test sonucu:** 59/59 test başarılı (brüt oran için mock da güncellendi).
+
+---
+
+### 2. Gerçekçi Faiz Oranı Referans Değerleri
+
+`InterestCalculationEngine`'deki baz aylık oranlar Türkiye bankacılık standartlarına uygun değerlere güncellendi:
+
+| Kredi Türü | Dengeli (baz) | Güvenli (baz) | Prestijli (baz) |
+|------------|---------------|---------------|-----------------|
+| Bireysel   | 3.91%         | 3.05%         | 2.20%           |
+| Taşıt      | 3.30%         | 2.55%         | 1.80%           |
+| Eğitim     | 2.85%         | 2.20%         | 1.55%           |
+
+VadeFactörü ve MeslekBonusu da güncellendi (bkz. `DECISIONS.md` K-06 ve K-22).
+
+---
+
+### 3. UI Ekran Geliştirmeleri
+
+#### LoanDetail (`/loans/:id`)
+
+**Müşteri bilgi kartı (yeni):**
+- Ekranın üstüne, krediye ait müşterinin adı (tıklanabilir), TC kimlik, yaş, meslek, istihdam durumu, aylık gelir ve e-posta bilgileri eklendi.
+- `customerService.getById()` çağrısıyla paralel olarak yükleniyor.
+
+**Taksit planı tablosu (genişletildi):**
+```
+Önceki kolonlar: # | Tutar | Son Ödeme | Ödeme Tarihi | Durum
+Yeni kolonlar:   # | Anapara | Net Faiz | KKDF | BSMV | Taksit | Son Ödeme | Ödeme Tarihi | Durum
+```
+Frontend'de `buildAmortizationTable()` fonksiyonu ile hesaplanan döküm, `installmentNumber` üzerinden her satıra eşleştiriliyor. Tablo `overflow-x-auto` ile yatay kaydırmalı.
+
+**Özet kartları (güncellendi):**
+- Vade Oranı kartı `Net · Brüt: X.XX` alt satırı eklendi.
+- "Ek Detaylar" satırına **YMO (Yıllık Maliyet Oranı)** eklendi.
+
+#### CustomerDetail (`/customers/:id`)
+
+**Kişisel bilgiler kartı (yeni):**
+- Borç özeti kartlarının üstüne kişisel bilgiler bölümü eklendi.
+- Gösterilen alanlar: TC Kimlik, Doğum Tarihi, Yaş (hesaplanmış), Meslek, İstihdam Durumu, Aylık Gelir, E-posta, Telefon, Kayıt Tarihi.
+- `customerService.getById()` mevcut `getSummary()` ile paralel çağrılıyor (Promise.all içinde).
+
+#### Loans (`/loans`) — Değerlendirme Paneli
+
+**Hızlı Tahmin kutusu (yeni):**
+- Onaylı değerlendirmeden sonra tutar/vade değiştirildiğinde evaluation sıfırlanır ama `liveRate` state'i korunur.
+- KKDF+BSMV dahil brüt oranla anlık aylık taksit ve toplam ödenecek hesaplanıp gösterilir.
+
+**Değerlendirme paneli (genişletildi):**
+- "Faiz & Maliyet" bölümü: Net Oran / Brüt Oran / YMO / Borç-Gelir (4 hücre).
+- "Ödeme Planını Göster/Gizle" accordion: 7 kolonlu (# / Anapara / Faiz / KKDF / BSMV / Toplam / Kalan) amortisman tablosu.
+
+---
+
+### Dosya Değişiklikleri (Bu Güncelleme)
+
+| Dosya | Değişiklik |
+|-------|-----------|
+| `CreditCase.Application/DTOs/LoanEvaluation/InstallmentPlanRow.cs` | Yeni DTO |
+| `CreditCase.Application/DTOs/LoanEvaluation/LoanEvaluationResponse.cs` | +3 alan |
+| `CreditCase.Application/Services/LoanEvaluationService.cs` | KKDF/BSMV, GenerateAmortizationTable, YMO |
+| `CreditCase.Infrastructure/Services/StandardInstallmentStrategy.cs` | Brüt oran formülü |
+| `CreditCase.Application/Services/LoanService.cs` | ComputeTotalPayable brüt oran |
+| `CreditCase.Tests/Services/LoanServiceTests.cs` | Mock brüt oran güncellendi |
+| `CreditCase.UI/src/types/index.ts` | InstallmentPlanRow, LoanEvaluationResponse güncellendi |
+| `CreditCase.UI/src/pages/LoanDetail.tsx` | Müşteri kartı, genişletilmiş taksit tablosu, YMO |
+| `CreditCase.UI/src/pages/CustomerDetail.tsx` | Kişisel bilgiler kartı |
+| `CreditCase.UI/src/pages/Loans.tsx` | Hızlı tahmin, KKDF/BSMV değerlendirme paneli, ödeme planı accordion |
+| `CreditCase.UI/src/utils/loanCalculations.ts` | Tolerans ve eşik düzeltmeleri |

@@ -29,10 +29,15 @@ public class StandardInstallmentStrategy : IInstallmentPlanStrategy
             .ToList();
     }
 
+    // KKDF %15 + BSMV %5 — taşıt/ihtiyaç/eğitim kredisi standartları
+    private const decimal KkdfRate = 0.15m;
+    private const decimal BsmvRate = 0.05m;
+
     internal static decimal ComputeMonthly(decimal principal, decimal rateAmount, int term)
     {
         if (term <= 0 || principal <= 0) return 0m;
-        decimal r = rateAmount / 100m;
+        decimal grossRate = rateAmount * (1 + KkdfRate + BsmvRate);
+        decimal r = grossRate / 100m;
         if (r == 0m) return Math.Round(principal / term, 2);
         double factor = Math.Pow(1 + (double)r, term);
         return Math.Round(principal * (decimal)(r * (decimal)factor / ((decimal)factor - 1)), 2);
