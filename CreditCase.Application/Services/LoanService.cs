@@ -17,7 +17,9 @@ namespace CreditCase.Application.Services;
 /// </summary>
 public class LoanService : ILoanService
 {
-    private const int BalloonMinCreditScore = 750;
+    // Balon ödeme yalnızca Dengeli (1150+) ve üzeri kategoriler için geçerlidir.
+    // Kritik (0-969) zaten genel kredi reddinde elenir; GelisimeAcik (970-1149) balon için çok riskli.
+    private const int BalloonMinCreditScore = 1150;
     private const decimal MinLoanAmount = 1_000m;
 
     private readonly ILoanRepository _loanRepository;

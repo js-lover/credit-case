@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\CreditCase.Application\CreditCase.Application.csproj" />
     <ProjectReference Include="..\CreditCase.Domain\CreditCase.Domain.csproj" />
+    <ProjectReference Include="..\CreditCase.Infrastructure\CreditCase.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

@@ -604,14 +604,16 @@ RemainingPrincipal = SUM(ödenmemiş taksitlerin Amount değerleri)
 
 ### Balon Ödeme Planı — `BalloonPaymentStrategy`
 
-Standart amortisasyon tutarının **%60**'ı kadar düşük ilk taksitler; kalan tüm borç son taksite (balon) yansıtılır:
+Standart amortisasyon tutarının **%60**'ı kadar düşük ilk taksitler; ertelenen kısım son taksite (balon) yansıtılır:
 
 ```
 regularAmount = ROUND(standardMonthlyAmount × 0.60, 2)
-balloonAmount = ROUND(totalPayable − regularAmount × (term − 1), 2)
+balloonAmount = ROUND(standardMonthlyAmount × term − regularAmount × (term − 1), 2)
 ```
 
-**Kısıt:** `balloonAmount ≤ principalAmount × 0.50` (anaparanın %50'sini aşamaz).
+**Kısıtlar:**
+- `balloonAmount ≤ principalAmount × 0.90` (KKDF/BSMV brüt oran dahil gerçekçi üst limit)
+- Maksimum vade: 36 ay (48+ ay için balon tutar anaparayı aşabilir)
 
 ---
 
@@ -651,38 +653,131 @@ sequenceDiagram
 
 ## Balon Ödeme
 
-Balon ödeme, kredinin bir kısmını son aya erteleyerek ilk taksitlerde yük azaltan özel bir geri ödeme modelidir.
+Balon ödeme, kredinin ertelenmiş kısmını son taksite yükleyerek ilk n−1 taksitte ödeme yükünü düşüren özel bir geri ödeme modelidir. Tipik kullanım: araç alımında kısa vadede düşük taksit, ileriye alınan büyük ödeme.
+
+### Kavramsal Model
+
+```
+Ay:     1      2      3   ···  n-1     n
+        ┌──────┬──────┬──────┬──────┬────────────────┐
+Standart│  A   │  A   │  A   │  A   │       A        │  A × n toplam
+        └──────┴──────┴──────┴──────┴────────────────┘
+
+        ┌──────┬──────┬──────┬──────┬────────────────┐
+Balon   │ 0.6A │ 0.6A │ 0.6A │ 0.6A │  A×n − 0.6A×(n-1)  │  Aynı toplam
+        └──────┴──────┴──────┴──────┴────────────────┘
+                 ↑ düşük aylık                  ↑ BALON (son taksit)
+```
+
+> **Toplam ödeme her iki planda da eşittir** — erteleme faizi farklı dağıtılır, maliyet aynıdır.
+
+---
+
+### Uygunluk Koşulları
+
+```mermaid
+flowchart TD
+    REQ([Balon Ödeme Talebi]) --> T1{Kredi Türü\nVehicle mı?}
+    T1 -->|Hayır| E1([422 — Yalnızca Araç kredisi])
+    T1 -->|Evet| T2{Kredi Skoru\n≥ 1150 mı?\nDengeli+}
+    T2 -->|Hayır| E2([422 — Min. 1150 skor gerekli])
+    T2 -->|Evet| T3{Vade\n≤ 36 ay mı?}
+    T3 -->|Hayır| E3([422 — Maks. vade 36 ay])
+    T3 -->|Evet| T4{Balon Tutar\n≤ Anapara × 0.90?}
+    T4 -->|Hayır| E4([422 — Balon üst limiti aşıldı])
+    T4 -->|Evet| OK([Balon Taksit Planı Oluşturuldu ✓])
+
+    style OK  fill:#d1fae5,color:#064e3b
+    style E1  fill:#fee2e2,color:#991b1b
+    style E2  fill:#fee2e2,color:#991b1b
+    style E3  fill:#fee2e2,color:#991b1b
+    style E4  fill:#fee2e2,color:#991b1b
+```
+
+---
+
+### Formül
+
+```
+1. Standart Aylık:  A = ComputeMonthly(P, rateAmount, term)
+                        (KKDF+BSMV brüt oran dahil amortisasyon — bkz. Taksit Hesaplama)
+
+2. Normal Taksit:   regularAmount  = ROUND(A × 0.60, 2)
+3. Balon Taksit:    balloonAmount  = ROUND(A × term − regularAmount × (term − 1), 2)
+
+Kontroller:
+   balloonAmount ≤ principalAmount × 0.90   →  ihlal → 422
+   term          ≤ 36                        →  ihlal → 422
+```
+
+---
+
+### Sayısal Örnek
+
+**Senaryo:** 100.000 ₺ Araç Kredisi — Dengeli Kategori — 12 Ay
+
+| Parametre | Değer |
+|---|---|
+| Ana Para | 100.000,00 ₺ |
+| Vade Oranı | 3,30 (Vehicle / Dengeli) |
+| Brüt Oran (×1,20) | 3,96 |
+| Vade | 12 ay |
+| Standart Aylık (`A`) | **10.630,50 ₺** |
+
+**Balon Plan Üretimi:**
+
+| Adım | Hesap | Sonuç |
+|---|---|---|
+| Regular | `ROUND(10.630,50 × 0,60, 2)` | **6.378,30 ₺** |
+| Balon | `ROUND(10.630,50 × 12 − 6.378,30 × 11, 2)` | **57.404,70 ₺** |
+| Toplam | `6.378,30 × 11 + 57.404,70` | **127.566,00 ₺** ← standart toplamla eşit |
+
+**Aylık Karşılaştırma:**
 
 ```mermaid
 gantt
-    title Standart vs Balon Ödeme Karşılaştırması (12 Ay, 20.000 ₺)
-    dateFormat MM
+    title Standart vs Balon — 100.000 ₺ Araç Kredisi / 12 Ay
+    dateFormat YYYY-MM
     axisFormat Ay %m
 
-    section Standart
-    1.800 ₺/ay (×12) :01, 12M
+    section Standart (her ay eşit)
+    10.630 ₺ × 12 :2026-01, 12M
 
-    section Balon
-    1.080 ₺/ay (×11) :01, 11M
-    13.200 ₺ balon   :12, 1M
+    section Balon (düşük + büyük son)
+    6.378 ₺ × 11 :2026-01, 11M
+    57.405 ₺ BALON :2026-12, 1M
 ```
 
-**Standart Kredi (20.000 ₺, %8, 12 ay):**
+**Taksit Planı Tablosu:**
 
-| Taksit | Tutar |
-|---|---|
-| 1–12 | 1.800 ₺ / ay |
-| **Toplam** | **21.600 ₺** |
+| # | Standart | Balon | `IsBalloon` |
+|:-:|---:|---:|:-:|
+| 1 | 10.630,50 ₺ | 6.378,30 ₺ | `false` |
+| 2 | 10.630,50 ₺ | 6.378,30 ₺ | `false` |
+| … | … | … | … |
+| 11 | 10.630,50 ₺ | 6.378,30 ₺ | `false` |
+| **12** | **10.630,50 ₺** | **57.404,70 ₺** | **`true`** |
+| **Toplam** | **127.566,00 ₺** | **127.566,00 ₺** | — |
 
-**Balon Ödemeli Kredi (aynı parametreler):**
+---
 
-| Taksit | Tutar |
-|---|---|
-| 1–11 | ~1.080 ₺ / ay (normalin %60'ı) |
-| 12 (BALON) | ~13.720 ₺ |
-| **Toplam** | **21.600 ₺** |
+### Sınır Değerleri
 
-**Kısıtlamalar:** Yalnızca Taşıt (`Vehicle`) kredilerinde seçilebilir. Balon tutar anaparanın %50'sini aşarsa başvuru reddedilir.
+| Vade | Balon Tutar | Balon / Anapara | Sınır (0,90) |
+|:---:|---:|:---:|:---:|
+| 6 ay | 56.565 ₺ | %56,6 | ✓ |
+| 12 ay | 57.405 ₺ | %57,4 | ✓ |
+| 24 ay | 68.259 ₺ | %68,3 | ✓ |
+| 36 ay | 83.730 ₺ | %83,7 | ✓ |
+| **48 ay** | **— (engellendi)** | **%103,5** | **✗ MaxTerm** |
+
+*100.000 ₺, Vade Oranı 3,30 üzerinden hesaplanmıştır.*
+
+---
+
+### Tasarım Notu
+
+KKDF (%15) + BSMV (%5) brüt oran hesabına dahil edildiğinden standart aylık taksit (`A`) saf anaparaya göre daha yüksektir. Bu nedenle balon tutar hiçbir zaman anaparanın %50'sinin altına düşmez — `MaxBalloonRatio = 0.90` bu gerçeği yansıtır. 48 ay ve üzeri vadeler `MaxBalloonTerm = 36` ile engellenir; aksi hâlde balon anapara miktarını aşar.
 
 ---
 
@@ -818,7 +913,7 @@ flowchart TD
     M -->|false| O[StandardInstallmentStrategy\nEşit taksitler]
     N --> P[Taksit tutarları hesaplanır]
     O --> P
-    P -->|Balon > %50 anapara| ERR5([422 İş Kuralı İhlali])
+    P -->|Balon > %90 anapara\nveya vade > 36 ay| ERR5([422 İş Kuralı İhlali])
     P --> Q["Loan + Installments\nEF Core cascade insert"]
     Q --> R([201 Created\nLoanResponse + taksit listesi])
 
