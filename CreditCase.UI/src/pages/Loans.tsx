@@ -14,17 +14,9 @@ import { LoanStatusBadge } from '../components/ui/Badge';
 import { Spinner } from '../components/ui/Spinner';
 import { formatCurrency, formatDate } from '../utils/formatters';
 
-// ── Vade seçenekleri ve tutara göre kısıtlama ────────────────────────────────
+// ── Vade seçenekleri ─────────────────────────────────────────────────────────
 
-const TERM_OPTIONS = [3, 6, 12, 24, 36, 48, 60, 84, 120];
-
-// Backend CreateLoanRequestValidator.GetMaxTermForAmount ile eşdeğer.
-const getMaxTermForAmount = (amount: number): number => {
-  if (amount <= 10_000) return 24;
-  if (amount <= 50_000) return 60;
-  if (amount <= 150_000) return 84;
-  return 120;
-};
+const TERM_OPTIONS = [6, 12, 18, 24, 36, 48, 60, 72];
 
 // ── Risk badge ────────────────────────────────────────────────────────────────
 
@@ -79,13 +71,6 @@ function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
       const next = { ...prev, [field]: value } as CreateLoanRequest;
       if (field === 'loanType' && Number(value) !== LoanType.Vehicle) {
         next.isBalloonPayment = false;
-      }
-      // Tutar değişince mevcut vade kısıt dışına çıkmış olabilir — sıfırla.
-      if (field === 'principalAmount') {
-        const maxTerm = getMaxTermForAmount(Number(value));
-        if (next.term > maxTerm) {
-          next.term = TERM_OPTIONS.filter(t => t <= maxTerm).at(-1) ?? 12;
-        }
       }
       return next;
     });
@@ -185,14 +170,9 @@ function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
 
       {/* Vade */}
       <div>
-        <label className="block text-sm font-medium text-[#0F172A] mb-1">
-          Vade
-          <span className="ml-2 text-xs text-[#64748B]">
-            (bu tutar için maks. {getMaxTermForAmount(form.principalAmount)} ay)
-          </span>
-        </label>
+        <label className="block text-sm font-medium text-[#0F172A] mb-1">Vade</label>
         <div className="flex flex-wrap gap-2">
-          {TERM_OPTIONS.filter(t => t <= getMaxTermForAmount(form.principalAmount)).map(t => (
+          {TERM_OPTIONS.map(t => (
             <button
               key={t}
               type="button"

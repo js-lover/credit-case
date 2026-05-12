@@ -261,13 +261,9 @@ export function CustomerDetail() {
                   <circle cx="18" cy="18" r="15.9" fill="none" stroke="#E2E8F0" strokeWidth="3" />
                   <circle
                     cx="18" cy="18" r="15.9" fill="none"
-                    stroke={
-                      creditProfile.riskLevel === 0 ? '#16A34A' :
-                      creditProfile.riskLevel === 1 ? '#D97706' :
-                      creditProfile.riskLevel === 2 ? '#EA580C' : '#DC2626'
-                    }
+                    stroke={SCORE_CATEGORY_COLORS[creditProfile.creditScoreCategory]}
                     strokeWidth="3"
-                    strokeDasharray={`${(creditProfile.creditScore / 1000) * 100} 100`}
+                    strokeDasharray={`${(creditProfile.creditScore / 1900) * 100} 100`}
                     strokeLinecap="round"
                   />
                 </svg>
@@ -277,7 +273,7 @@ export function CustomerDetail() {
               </div>
               <div>
                 <p className="text-xs text-[#64748B]">Kredi Notu</p>
-                <p className="text-lg font-bold text-[#0F172A]">{creditProfile.creditScore} <span className="text-xs font-normal text-[#64748B]">/ 1000</span></p>
+                <p className="text-lg font-bold text-[#0F172A]">{creditProfile.creditScore} <span className="text-xs font-normal text-[#64748B]">/ 1900</span></p>
               </div>
             </div>
 
@@ -299,10 +295,11 @@ export function CustomerDetail() {
 
             {/* Skor açıklaması */}
             <div className="ml-auto text-xs text-[#64748B] hidden lg:block">
-              <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />750+ Düşük Risk &nbsp;
-              <span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1" />600–749 Orta &nbsp;
-              <span className="inline-block w-2 h-2 rounded-full bg-orange-500 mr-1" />400–599 Yüksek &nbsp;
-              <span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />&lt;400 Çok Yüksek
+              <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: SCORE_CATEGORY_COLORS[4] }} />1720+ Prestijli &nbsp;
+              <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: SCORE_CATEGORY_COLORS[3] }} />1470–1719 Güvenli &nbsp;
+              <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: SCORE_CATEGORY_COLORS[2] }} />1150–1469 Dengeli &nbsp;
+              <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: SCORE_CATEGORY_COLORS[1] }} />970–1149 Gelişime Açık &nbsp;
+              <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: SCORE_CATEGORY_COLORS[0] }} />&lt;970 Kritik
             </div>
           </div>
         ) : (
