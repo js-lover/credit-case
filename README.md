@@ -152,6 +152,7 @@ CreditCase.sln
 ├── CreditCase.Infrastructure/
 │   ├── Persistence/
 │   │   ├── AppDbContext.cs      # Global query filter, filtered unique indexes
+│   │   ├── DatabaseSeeder.cs    # Geliştirme ortamı demo verisi (SeedDatabase flag)
 │   │   └── Repositories/
 │   │       ├── CustomerRepository.cs
 │   │       ├── LoanRepository.cs
@@ -501,62 +502,63 @@ Son Vade Oranı = TemelOran × (1 + VadeFactörü) ± MeslekBonusu
 
 | | Kritik | GelisimeAcik | Dengeli | Guvenli | Prestijli |
 |---|---|---|---|---|---|
-| **Bireysel** | 6.8 | 5.2 | 4.0 | 3.0 | 2.0 |
-| **Taşıt** | 5.8 | 4.2 | 3.0 | 2.0 | 1.2 |
-| **Eğitim** | 5.2 | 3.8 | 2.7 | 1.7 | 0.9 |
+| **Bireysel** | 5.80 | 4.80 | 3.91 | 3.05 | 2.20 |
+| **Taşıt** | 5.10 | 4.15 | 3.30 | 2.55 | 1.80 |
+| **Eğitim** | 4.50 | 3.60 | 2.85 | 2.20 | 1.55 |
 
 ### Aşama 2 — Vade Faktörü
 
 | Vade | Faktör |
 |---|---|
-| ≤ 6 ay | −0.25 (indirim) |
+| ≤ 6 ay | −0.08 (indirim) |
 | ≤ 12 ay | 0.00 (referans) |
-| ≤ 18 ay | +0.08 |
-| ≤ 24 ay | +0.15 |
-| ≤ 36 ay | +0.28 |
-| ≤ 48 ay | +0.42 |
-| ≤ 60 ay | +0.58 |
-| ≤ 72 ay | +0.75 |
+| ≤ 18 ay | +0.03 |
+| ≤ 24 ay | +0.06 |
+| ≤ 36 ay | +0.11 |
+| ≤ 48 ay | +0.17 |
+| ≤ 60 ay | +0.23 |
+| ≤ 72 ay | +0.30 |
 
 ### Aşama 3 — Meslek Bonusu / Penaltısı
 
 | Meslek | Etki |
 |---|---|
-| Kamu | −0.30 |
-| Sağlık, Teknoloji | −0.20 |
-| Eğitim | −0.15 |
-| Finans | −0.10 |
-| Ticaret, İnşaat | +0.20 |
-| Mevsimlik | +0.30 |
-| Serbest Meslek (EmploymentStatus) | min. +0.30 |
+| Kamu | −0.20 |
+| Sağlık | −0.15 |
+| Teknoloji | −0.15 |
+| Eğitim | −0.10 |
+| Finans | −0.08 |
+| Ticaret, İnşaat | +0.15 |
+| Mevsimlik | +0.25 |
+| Serbest Meslek (EmploymentStatus) | min. +0.25 |
 
 ### Örnek Hesaplamalar
 
 **Senaryo A — Güvenli Kategorisi, Yazılımcı, 24 ay:**
 ```
-Kredi Skoru: 1550 → Guvenli
-Temel Oran (Bireysel, Guvenli): 3.0
-Vade Faktörü (24 ay): +0.15  →  3.0 × 1.15 = 3.45
-Meslek Bonusu (Teknoloji): −0.20
-Son Vade Oranı = 3.45 − 0.20 = 3.25
+Kredi Skoru: 1575 → Guvenli
+Temel Oran (Bireysel, Guvenli): 3.05
+Vade Faktörü (24 ay): +0.06  →  3.05 × 1.06 = 3.233
+Meslek Bonusu (Teknoloji): −0.15
+Son Vade Oranı = 3.233 − 0.15 = 3.08
 ```
 
-**Senaryo B — Dengeli Kategorisi, Satış, 36 ay:**
+**Senaryo B — Dengeli Kategorisi, Ticaret, 36 ay:**
 ```
-Kredi Skoru: 1200 → Dengeli
-Temel Oran (Bireysel, Dengeli): 4.0
-Vade Faktörü (36 ay): +0.28  →  4.0 × 1.28 = 5.12
-Meslek Bonusu (Ticaret): +0.20
-Son Vade Oranı = 5.12 + 0.20 = 5.32
+Kredi Skoru: 1290 → Dengeli
+Temel Oran (Bireysel, Dengeli): 3.91
+Vade Faktörü (36 ay): +0.11  →  3.91 × 1.11 = 4.34
+Meslek Bonusu (Ticaret): +0.15
+Son Vade Oranı = 4.34 + 0.15 = 4.49
 ```
 
 ```mermaid
 flowchart TD
     START([Kredi Başvurusu]) --> CAT["ScoreCategory\nKritik / Dengeli / Guvenli ..."]
     CAT --> BASE["Temel Vade Oranı\nLoanType × ScoreCategory\n(12 ay referans tablosu)"]
-    BASE --> TF["× (1 + VadeFactörü)\n≤6ay: −0.25 · 12ay: 0 · 72ay: +0.75"]
-    TF --> MB["± Meslek Bonusu\nKamu: −0.30 · Mevsimlik: +0.30"]
-    MB --> RATE(["Son Vade Oranı\n(ratio: 0.9 – 8.0 arası)"])
+    BASE --> TF["× (1 + VadeFactörü)\n≤6ay: −0.08 · 12ay: 0 · 72ay: +0.30"]
+    TF --> MB["± Meslek Bonusu\nKamu: −0.20 · Mevsimlik: +0.25"]
+    MB --> RATE(["Son Vade Oranı\n(ratio: 1.5 – 6.5 arası)"])
 
     style START fill:#dbeafe,color:#1e3a8a
     style RATE fill:#d1fae5,color:#064e3b
@@ -573,11 +575,12 @@ Faiz oranı belirlendikten sonra taksit planı iki strateji sınıfından biri i
 **Amortisasyon (azalan bakiye) yöntemiyle** eşit tutarlı taksit planı üretir:
 
 ```
-r = rateAmount / 100 / 12   (yıllık ratio → aylık oran)
-A = P × r(1+r)^n / [(1+r)^n − 1]
+grossRate = rateAmount × (1 + 0.15 + 0.05)   (KKDF %15 + BSMV %5 dahil brüt oran)
+r         = grossRate / 100                   (yıllık ratio → direkt aylık bölücü)
+A         = P × r(1+r)^n / [(1+r)^n − 1]
 
 P = Anapara
-r = Aylık oran
+r = Brüt oran (vergi dahil, 100'e bölünmüş)
 n = Vade (ay)
 A = Aylık taksit tutarı
 ```
@@ -586,11 +589,12 @@ A = Aylık taksit tutarı
 ```
 Ana Para: 50.000 ₺ · Vade Oranı: 3.30 · Vade: 24 ay
 
-r = 3.30 / 100 / 12 = 0.00275
-A = 50.000 × 0.00275 × (1.00275)^24 / [(1.00275)^24 − 1]
-A ≈ 2.151 ₺/ay  (tüm taksitler eşit)
+grossRate = 3.30 × 1.20 = 3.96
+r         = 3.96 / 100  = 0.0396
+A = 50.000 × 0.0396 × (1.0396)^24 / [(1.0396)^24 − 1]
+A ≈ 3.265 ₺/ay  (tüm taksitler eşit)
 
-Toplam Ödeme ≈ 51.624 ₺  (ek ödeme: ~1.624 ₺)
+Toplam Ödeme ≈ 78.360 ₺  (ek ödeme: ~28.360 ₺)
 ```
 
 `RemainingPrincipal`, her başarılı ödemede ödenmemiş taksit tutarlarının toplamıyla güncellenir:
@@ -1057,6 +1061,8 @@ dotnet run --project CreditCase.Api
 
 Backend varsayılan olarak `http://localhost:5285` adresinde çalışır.  
 Swagger arayüzü: `http://localhost:5285/swagger`
+
+> **Demo verisi eklemek için:** `CreditCase.Api/appsettings.Development.json` içinde `"SeedDatabase": true` yapın ve uygulamayı bir kez çalıştırın. Seeder mevcut tüm kayıtları siler ve 7 müşteri, 4 aktif kredi, 10 ödeme ve 3 red kararı oluşturur. İşlem sonrası `false`'a geri alın.
 
 ### 4. Frontend'i başlat
 

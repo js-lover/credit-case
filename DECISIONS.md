@@ -68,10 +68,12 @@ Vade oranı **ratio formatındadır** (örn. `3.25`, `4.48`) — yüzde değildi
 ```
 Son Vade Oranı = TemelOran[LoanType][ScoreCategory] × (1 + VadeFactörü) ± MeslekBonusu
 
-TemelOran    : claude.md §6A tablosu (12 ay referans)
-               Bireysel / Kritik=6.8 ... Eğitim / Prestijli=0.9
-VadeFactörü  : ≤6ay=−0.25, 12ay=0.00, 24ay=+0.15, 36ay=+0.28, 72ay=+0.75
-MeslekBonusu : Kamu=−0.30, Sağlık/Teknoloji=−0.20, Mevsimlik=+0.30
+TemelOran    : InterestCalculationEngine içindeki matris (12 ay referans)
+               Örn. Bireysel/Dengeli=3.91, Araç/Dengeli=3.30, Eğitim/Dengeli=2.85
+VadeFactörü  : ≤6ay=−0.08, 12ay=0.00, 18ay=+0.03, 24ay=+0.06,
+               36ay=+0.11, 48ay=+0.17, 60ay=+0.23, >60ay=+0.30
+MeslekBonusu : Kamu=−0.20, Sağlık=−0.15, Teknoloji=−0.15, Eğitim=−0.10,
+               Finans=−0.08, Ticaret=+0.15, İnşaat=+0.15, Serbest=min +0.25
 ```
 
 **Bileşen 2 — Taksit Hesaplama (`StandardInstallmentStrategy`):**
