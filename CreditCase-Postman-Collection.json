@@ -1,15 +1,20 @@
 {
   "info": {
     "name": "CreditCase API",
-    "description": "Digital Loan & Repayment Management System — Sunum Senaryoları\n\n**Kurulum:**\n1. API'yi başlat: `dotnet run --project CreditCase.Api`\n2. Seed verisi için appsettings.Development.json → SeedDatabase: true yapıp bir kez çalıştır\n3. baseUrl değişkenini kontrol et (varsayılan: http://localhost:5285)\n\n**ID'ler hakkında:**\nSeed sonrası müşteri ID'leri 1–7, kredi ID'leri 1–4 olarak oluşturulur.\nÖrnek request'lerdeki ID'leri gerçek verilerle güncelle.",
+    "description": "Digital Loan & Repayment Management System — Sunum Senaryoları\n\n⚠️  Enum değerleri integer olarak gönderilir:\n  LoanType       → Personal=0, Education=1, Vehicle=2\n  ProfessionCategory → Government=0, Healthcare=1, Finance=2, Technology=3, Education=4, Commerce=5, Services=6\n  EmploymentStatus   → Active=0, PartTime=1, Freelance=2, Retired=3, Unemployed=4\n\n⚠️  ID'ler veritabanı seed'ine göre değişir. Değişkenler güncel seed verisiyle ayarlıdır.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl",       "value": "http://localhost:5285", "type": "string" },
-    { "key": "customerId",    "value": "1",  "type": "string", "description": "Mustafa Koç (Güvenli, seed sonrası)" },
-    { "key": "loanId",        "value": "1",  "type": "string", "description": "Mustafa'nın Araç Kredisi" },
-    { "key": "installmentId", "value": "5",  "type": "string", "description": "İlk gecikmiş taksit — listeden güncelle" },
-    { "key": "evaluationId",  "value": "1",  "type": "string", "description": "Seed sırasında oluşturulan ilk değerlendirme" }
+    { "key": "baseUrl",              "value": "http://localhost:5285" },
+    { "key": "customerId_mustafa",   "value": "29",  "description": "Mustafa Koç — Güvenli ~1650" },
+    { "key": "customerId_nur",       "value": "34",  "description": "Nur Şahin — GelişimeAçık ~1005 (red senaryosu)" },
+    { "key": "customerId_ayse",      "value": "33",  "description": "Ayşe Kara — Dengeli ~1375" },
+    { "key": "customerId_zeynep",    "value": "36",  "description": "Zeynep Demir — yeni oluşturulan demo müşteri" },
+    { "key": "loanId_standard",      "value": "24",  "description": "Zeynep standart kredi (Personal 120K 12ay)" },
+    { "key": "loanId_balloon",       "value": "25",  "description": "Zeynep balon kredi (Vehicle 100K 12ay)" },
+    { "key": "loanId_mustafa",       "value": "19",  "description": "Mustafa araç kredisi 450K 36ay" },
+    { "key": "installmentId_overdue","value": "588", "description": "Mustafa loan:19 #6 — Overdue, ödeme demosu için" },
+    { "key": "evaluationId",         "value": "340", "description": "Zeynep onaylı değerlendirme" }
   ],
   "item": [
 
@@ -27,35 +32,49 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "customers"]
             },
-            "description": "Sistemdeki tüm müşterileri listeler. Seed sonrası 7 müşteri görünmeli."
+            "description": "→ 200 OK | 7 müşteri listelenir (seed sonrası)"
           }
         },
 
         {
-          "name": "Müşteri Detayı",
+          "name": "Müşteri Detayı — Mustafa Koç",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/customers/{{customerId}}",
+              "raw": "{{baseUrl}}/api/customers/{{customerId_mustafa}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "customers", "{{customerId}}"]
+              "path": ["api", "customers", "{{customerId_mustafa}}"]
             },
-            "description": "Tek müşteri kaydı. Ad, soyad, TC, meslek, gelir gibi alanlar döner."
+            "description": "→ 200 OK | professionCategory:0 (Government), employmentStatus:0 (Active)"
           }
         },
 
         {
-          "name": "Borç Özeti",
+          "name": "Borç Özeti — Mustafa Koç",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/customers/{{customerId}}/summary",
+              "raw": "{{baseUrl}}/api/customers/{{customerId_mustafa}}/summary",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "customers", "{{customerId}}", "summary"]
+              "path": ["api", "customers", "{{customerId_mustafa}}", "summary"]
             },
-            "description": "Müşterinin toplam kalan anaparası, gecikmiş/ödenen/bekleyen taksit sayısı ve toplam borcu."
+            "description": "→ 200 OK | totalRemainingPrincipal, overdueCount, paidCount, pendingCount, totalOutstandingDebt"
+          }
+        },
+
+        {
+          "name": "Değerlendirme Geçmişi — Ayşe Kara",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerId_ayse}}/evaluations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "customers", "{{customerId_ayse}}", "evaluations"]
+            },
+            "description": "→ 200 OK | isApproved:false kayıtları döner (seed'de reddedildi)"
           }
         },
 
@@ -66,7 +85,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"firstName\": \"Zeynep\",\n  \"lastName\": \"Demir\",\n  \"identityNumber\": \"20000000001\",\n  \"email\": \"zeynep.demir@creditcase.dev\",\n  \"phoneNumber\": \"5321234567\",\n  \"dateOfBirth\": \"1990-04-10T00:00:00Z\",\n  \"monthlyIncome\": 35000,\n  \"professionCategory\": \"Technology\",\n  \"employmentStatus\": \"Active\"\n}",
+              "raw": "{\n  \"firstName\": \"Ahmet\",\n  \"lastName\": \"Yılmaz\",\n  \"identityNumber\": \"88888888801\",\n  \"email\": \"ahmet.yilmaz@creditcase.dev\",\n  \"phoneNumber\": \"5321234999\",\n  \"dateOfBirth\": \"1988-07-20T00:00:00Z\",\n  \"monthlyIncome\": 45000,\n  \"professionCategory\": 3,\n  \"employmentStatus\": 0\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -74,40 +93,26 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "customers"]
             },
-            "description": "201 Created döner. Dönen ID'yi customerId değişkenine kaydet."
+            "description": "→ 201 Created\nprofessionCategory:3 = Technology\nemploymentStatus:0 = Active\nDönen id'yi loanId oluşturma adımlarında kullan."
           }
         },
 
         {
-          "name": "Müşteri Güncelle",
+          "name": "Müşteri Güncelle — Zeynep",
           "request": {
             "method": "PUT",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"firstName\": \"Mustafa\",\n  \"lastName\": \"Koç\",\n  \"email\": \"mustafa.koc.updated@creditcase.dev\",\n  \"phoneNumber\": \"5301234599\"\n}",
+              "raw": "{\n  \"firstName\": \"Zeynep\",\n  \"lastName\": \"Demir\",\n  \"email\": \"zeynep.demir.new@creditcase.dev\",\n  \"phoneNumber\": \"5321234568\",\n  \"dateOfBirth\": \"1990-04-10T00:00:00Z\",\n  \"monthlyIncome\": 40000,\n  \"professionCategory\": 3,\n  \"employmentStatus\": 0\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{baseUrl}}/api/customers/{{customerId}}",
+              "raw": "{{baseUrl}}/api/customers/{{customerId_zeynep}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "customers", "{{customerId}}"]
+              "path": ["api", "customers", "{{customerId_zeynep}}"]
             },
-            "description": "Ad, soyad, email, telefon güncellenebilir."
-          }
-        },
-
-        {
-          "name": "Değerlendirme Geçmişi",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/customers/5/evaluations",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "customers", "5", "evaluations"]
-            },
-            "description": "ID=5 Ayşe Kara'nın değerlendirme geçmişi. Seed'de reddedilen başvurusu kaydedilmiş olmalı."
+            "description": "→ 200 OK | Tüm alanlar (email, gelir, meslek vb.) güncellenebilir."
           }
         }
 
@@ -119,13 +124,13 @@
       "item": [
 
         {
-          "name": "Başvuru Değerlendir — ONAYLANDI",
+          "name": "Başvuru Değerlendir — ONAYLANDI (Mustafa)",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"customerId\": 1,\n  \"loanType\": \"Personal\",\n  \"requestedAmount\": 300000,\n  \"requestedTerm\": 24\n}",
+              "raw": "{\n  \"customerId\": 29,\n  \"loanType\": 0,\n  \"requestedAmount\": 400000,\n  \"requestedTerm\": 24\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -133,18 +138,18 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "loans", "evaluate"]
             },
-            "description": "Mustafa Koç (Güvenli ~1700) için 300.000 ₺ İhtiyaç Kredisi değerlendirmesi.\nisApproved: true, riskLevel: Low, creditScore ~1700 döner."
+            "description": "→ 200 OK | isApproved:true | creditScore:~1650 | riskLevel:0 (Low)\nloanType:0 = Personal"
           }
         },
 
         {
-          "name": "Başvuru Değerlendir — REDDEDİLDİ",
+          "name": "Başvuru Değerlendir — REDDEDİLDİ (Nur Şahin)",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"customerId\": 6,\n  \"loanType\": \"Personal\",\n  \"requestedAmount\": 150000,\n  \"requestedTerm\": 24\n}",
+              "raw": "{\n  \"customerId\": 34,\n  \"loanType\": 0,\n  \"requestedAmount\": 150000,\n  \"requestedTerm\": 24\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -152,7 +157,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "loans", "evaluate"]
             },
-            "description": "ID=6 Nur Şahin (düşük gelir, part-time) için 150.000 ₺ başvurusu.\nisApproved: false, rejectionReason döner. HTTP 200 ama iş mantığı reddeder."
+            "description": "→ 200 OK | isApproved:false | rejectionReason dolu döner\nNur Şahin: düşük gelir (7.500 ₺), part-time çalışan → minimum taksit sınırı aşılamıyor."
           }
         },
 
@@ -166,21 +171,21 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "loans", "evaluation", "{{evaluationId}}"]
             },
-            "description": "Kaydedilmiş bir değerlendirme kaydını ID ile getirir."
+            "description": "→ 200 OK | Daha önce yapılmış bir değerlendirme kaydı getirir."
           }
         },
 
         {
-          "name": "Maksimum Kredi Uygunluğu",
+          "name": "Maksimum Kredi Uygunluğu — Mustafa",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/loans/maximum-eligibility/{{customerId}}",
+              "raw": "{{baseUrl}}/api/loans/maximum-eligibility/{{customerId_mustafa}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "loans", "maximum-eligibility", "{{customerId}}"]
+              "path": ["api", "loans", "maximum-eligibility", "{{customerId_mustafa}}"]
             },
-            "description": "Başvuru yapmadan müşterinin alabileceği maksimum kredi tutarını ve koşullarını gösterir."
+            "description": "→ 200 OK | maximumAmount ve maximumTerm döner. Başvuru yapmadan ön bilgi."
           }
         }
 
@@ -201,21 +206,35 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "loans"]
             },
-            "description": "Seed sonrası 4 aktif kredi listelenir."
+            "description": "→ 200 OK | loanType:0=Personal, 1=Education, 2=Vehicle | status:0=Active"
           }
         },
 
         {
-          "name": "Kredi Detayı",
+          "name": "Kredi Detayı — Mustafa Araç",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/loans/{{loanId}}",
+              "raw": "{{baseUrl}}/api/loans/{{loanId_mustafa}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "loans", "{{loanId}}"]
+              "path": ["api", "loans", "{{loanId_mustafa}}"]
             },
-            "description": "Kredi + taksit planı (installments dizisi) birlikte döner. IsBalloon, Status, DueDate alanları görünür."
+            "description": "→ 200 OK | installments dizisi taksit planını içerir. Ödenmiş taksitler status:0, vadesi geçmiş status:2."
+          }
+        },
+
+        {
+          "name": "Balon Kredi Detayı — Zeynep",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId_balloon}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "loans", "{{loanId_balloon}}"]
+            },
+            "description": "→ 200 OK | Son taksit (ID:762) isBalloon:true ve tutar diğerlerinden (~5.985 vs ~53.862 ₺) çok yüksek."
           }
         },
 
@@ -226,7 +245,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"customerId\": 1,\n  \"loanType\": \"Personal\",\n  \"principalAmount\": 120000,\n  \"term\": 12,\n  \"startDate\": \"2026-05-01T00:00:00Z\",\n  \"isBalloonPayment\": false\n}",
+              "raw": "{\n  \"customerId\": 29,\n  \"loanType\": 0,\n  \"principalAmount\": 150000,\n  \"term\": 12,\n  \"startDate\": \"2026-05-12T00:00:00Z\",\n  \"isBalloonPayment\": false\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -234,7 +253,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "loans"]
             },
-            "description": "12 eşit taksitli standart kredi. rateAmount sistem tarafından hesaplanır (UI'dan girilemez)."
+            "description": "→ 201 Created | rateAmount sistem tarafından hesaplanır (UI'dan girilemez).\n12 eşit tutarlı taksit üretilir, hepsi isBalloon:false."
           }
         },
 
@@ -245,7 +264,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"customerId\": 1,\n  \"loanType\": \"Vehicle\",\n  \"principalAmount\": 200000,\n  \"term\": 12,\n  \"startDate\": \"2026-05-01T00:00:00Z\",\n  \"isBalloonPayment\": true\n}",
+              "raw": "{\n  \"customerId\": 29,\n  \"loanType\": 2,\n  \"principalAmount\": 100000,\n  \"term\": 12,\n  \"startDate\": \"2026-05-12T00:00:00Z\",\n  \"isBalloonPayment\": true\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -253,7 +272,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "loans"]
             },
-            "description": "Araç kredisi + balon ödeme planı. Taksit 1–11 düşük tutar, taksit 12 (IsBalloon:true) yüksek.\nYalnızca Vehicle, skor ≥ 1150, vade ≤ 36 ay."
+            "description": "→ 201 Created | loanType:2 = Vehicle (zorunlu)\nTaksit 1–11: ~5.985 ₺ | Taksit 12 (isBalloon:true): ~53.862 ₺\nKural: yalnızca Vehicle, skor ≥ 1150, vade ≤ 36 ay."
           }
         }
 
@@ -274,21 +293,21 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "installments"]
             },
-            "description": "Tüm taksitler. Vadesi geçmiş ve ödenmemiş olanlar bu sorguda Overdue'ye çekilir. Status alanına dikkat."
+            "description": "→ 200 OK | Bu çağrıda vadesi geçmiş Unpaid taksitler otomatik Overdue'ye çekilir.\nstatus: 0=Paid, 1=Unpaid, 2=Overdue"
           }
         },
 
         {
-          "name": "Taksit Detayı",
+          "name": "Taksit Detayı — Mustafa #6 (Overdue)",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/installments/{{installmentId}}",
+              "raw": "{{baseUrl}}/api/installments/{{installmentId_overdue}}",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "installments", "{{installmentId}}"]
+              "path": ["api", "installments", "{{installmentId_overdue}}"]
             },
-            "description": "Tekil taksit. Ödeme yapılmışsa Payment nesnesi dolu gelir."
+            "description": "→ 200 OK | status:2 (Overdue) | payment alanı null (henüz ödenmedi)"
           }
         },
 
@@ -302,18 +321,18 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "payments"]
             },
-            "description": "Seed sonrası 10 ödeme kaydı görünmeli."
+            "description": "→ 200 OK | customerFullName, paymentDate, paymentAmount, loanType alanları döner."
           }
         },
 
         {
-          "name": "Taksit Öde",
+          "name": "Taksit Öde — Mustafa #6",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"installmentId\": 5,\n  \"paymentAmount\": 10630.50\n}",
+              "raw": "{\n  \"installmentId\": 588,\n  \"paymentAmount\": 21094.28\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -321,7 +340,21 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "payments"]
             },
-            "description": "⚠️ installmentId'yi önce GET /api/installments'dan Unpaid/Overdue bir taksit seçerek güncelle.\npaymentAmount taksit tutarıyla aynı olmalı.\nBaşarıdan sonra taksit Paid'e döner, kredi RemainingPrincipal güncellenir."
+            "description": "→ 201 Created | Taksit status:2→0 (Overdue→Paid)\nArdından GET /api/loans/19 ile RemainingPrincipal'in düştüğünü gözlemle.\nSıralı ödeme kuralı: önceki taksitler ödenmiş olmalıdır."
+          }
+        },
+
+        {
+          "name": "Ödeme Sonrası Kredi Durumu",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/{{loanId_mustafa}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "loans", "{{loanId_mustafa}}"]
+            },
+            "description": "→ 200 OK | Ödeme sonrası RemainingPrincipal'in güncellendiğini ve #6 taksitin status:0 (Paid) olduğunu doğrula."
           }
         }
 
@@ -342,32 +375,18 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "customers", "9999"]
             },
-            "description": "Beklenilen: 404 Not Found + standart hata gövdesi { statusCode, message, timestamp }"
+            "description": "→ 404 Not Found\n{ \"type\": \"NotFound\", \"message\": \"9999 numaralı müşteri bulunamadı.\" }"
           }
         },
 
         {
-          "name": "404 — Olmayan Kredi",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/loans/9999",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "loans", "9999"]
-            },
-            "description": "Beklenilen: 404 Not Found"
-          }
-        },
-
-        {
-          "name": "400 — Validasyon Hatası (boş alan)",
+          "name": "400 — Validasyon Hatası (çoklu alan)",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"identityNumber\": \"abc\",\n  \"email\": \"gecersiz-email\",\n  \"phoneNumber\": \"\",\n  \"dateOfBirth\": \"2020-01-01T00:00:00Z\",\n  \"monthlyIncome\": -500,\n  \"professionCategory\": \"Technology\",\n  \"employmentStatus\": \"Active\"\n}",
+              "raw": "{\n  \"firstName\": \"\",\n  \"lastName\": \"\",\n  \"identityNumber\": \"abc\",\n  \"email\": \"gecersiz-email\",\n  \"phoneNumber\": \"123\",\n  \"dateOfBirth\": \"2020-01-01T00:00:00Z\",\n  \"monthlyIncome\": -1,\n  \"professionCategory\": 3,\n  \"employmentStatus\": 0\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -375,7 +394,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "customers"]
             },
-            "description": "Beklenilen: 400 Bad Request — birden fazla validasyon hatası listesi döner."
+            "description": "→ 400 Bad Request\nFirstName, LastName, IdentityNumber, Email, PhoneNumber, DateOfBirth, MonthlyIncome hataları tek yanıtta gelir."
           }
         },
 
@@ -386,7 +405,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"installmentId\": 1,\n  \"paymentAmount\": 10630.50\n}",
+              "raw": "{\n  \"installmentId\": 583,\n  \"paymentAmount\": 21094.28\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -394,18 +413,18 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "payments"]
             },
-            "description": "installmentId=1 seed'de zaten ödendi. Beklenilen: 422 Unprocessable Entity — iş kuralı ihlali mesajı."
+            "description": "→ 422 Unprocessable Entity\nInstallment 583 = Mustafa #1, zaten ödenmiş.\n{ \"type\": \"BusinessRuleViolation\", \"message\": \"Bu taksit zaten ödenmiştir.\" }"
           }
         },
 
         {
-          "name": "422 — Araç Dışı Kredi ile Balon Talep",
+          "name": "400 — Balon + Araç Dışı Kredi",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"customerId\": 1,\n  \"loanType\": \"Personal\",\n  \"principalAmount\": 100000,\n  \"term\": 12,\n  \"startDate\": \"2026-05-01T00:00:00Z\",\n  \"isBalloonPayment\": true\n}",
+              "raw": "{\n  \"customerId\": 29,\n  \"loanType\": 0,\n  \"principalAmount\": 100000,\n  \"term\": 12,\n  \"startDate\": \"2026-05-12T00:00:00Z\",\n  \"isBalloonPayment\": true\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": {
@@ -413,7 +432,26 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "loans"]
             },
-            "description": "Beklenilen: 422 — 'Balon ödeme yalnızca Araç kredileri için kullanılabilir.'"
+            "description": "→ 400 Bad Request\nloanType:0 = Personal — balon ödeme sadece loanType:2 (Vehicle) ile kullanılabilir."
+          }
+        },
+
+        {
+          "name": "422 — Kredi Skoru Yetersiz (Değerlendirme)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": 34,\n  \"loanType\": 0,\n  \"requestedAmount\": 500000,\n  \"requestedTerm\": 24\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/loans/evaluate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "loans", "evaluate"]
+            },
+            "description": "→ 200 OK ama isApproved:false\nNur Şahin 500.000 ₺ talep ediyor; skor ~1005 (GelişimeAçık) ile talep tutarı maksimum limiti (gelir×3 = 22.500 ₺) çok aşıyor."
           }
         }
 
