@@ -228,8 +228,13 @@ function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
 
       {/* Değerlendirme sonucu */}
       {evaluation && (() => {
+        // Finansal hesaplar onaylanan tutar (approvedAmount) üzerinden yapılır.
+        // monthlyInstallmentEstimate zaten approvedAmount bazlı döner.
+        const base = evaluation.isApproved ? evaluation.approvedAmount : form.principalAmount;
         const totalPayable = Math.round(evaluation.monthlyInstallmentEstimate * form.term * 100) / 100;
-        const totalInterest = Math.round((totalPayable - form.principalAmount) * 100) / 100;
+        const totalInterest = Math.round((totalPayable - base) * 100) / 100;
+        const amountCapped = evaluation.isApproved && evaluation.approvedAmount < form.principalAmount;
+
         const endDate = (() => {
           const d = new Date(form.startDate);
           d.setMonth(d.getMonth() + form.term);
@@ -261,11 +266,19 @@ function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
                 </p>
               )}
 
+              {/* Tutar kısıtlandı uyarısı */}
+              {amountCapped && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                  İstenen tutar ({formatCurrency(form.principalAmount)}) limit aşıyor.
+                  Onaylanan tutar: <span className="font-semibold">{formatCurrency(evaluation.approvedAmount)}</span>
+                </p>
+              )}
+
               {/* Finansal özet */}
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B] mb-1.5">Finansal Özet</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <EvalCell label="İstenen Tutar" value={formatCurrency(form.principalAmount)} />
+                  <EvalCell label="Onaylanan Tutar" value={formatCurrency(base)} />
                   <EvalCell label="Toplam Ödenecek" value={formatCurrency(totalPayable)} highlight={evaluation.isApproved} />
                   <EvalCell label="Aylık Taksit" value={formatCurrency(evaluation.monthlyInstallmentEstimate)} highlight={evaluation.isApproved} />
                   <EvalCell label="Toplam Faiz" value={formatCurrency(totalInterest)} />
