@@ -27,6 +27,17 @@ const RISK_COLORS: Record<RiskCategory, string> = {
   [RiskCategory.VeryHigh]: 'bg-red-100 text-red-700',
 };
 
+// ── Değerlendirme sonucu hücresi ─────────────────────────────────────────────
+
+function EvalCell({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className="bg-white/70 rounded px-2.5 py-1.5">
+      <p className="text-[10px] text-[#64748B]">{label}</p>
+      <p className={`text-xs font-semibold mt-0.5 ${highlight ? 'text-[#1B4FD8]' : 'text-[#0F172A]'}`}>{value}</p>
+    </div>
+  );
+}
+
 // ── Kredi oluşturma formu ─────────────────────────────────────────────────────
 
 function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
@@ -216,37 +227,74 @@ function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
       )}
 
       {/* Değerlendirme sonucu */}
-      {evaluation && (
-        <div className={`rounded-lg p-3 border text-sm space-y-2 ${evaluation.isApproved ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-          <div className="flex items-center justify-between">
-            <span className={`font-semibold ${evaluation.isApproved ? 'text-green-700' : 'text-red-700'}`}>
-              {evaluation.isApproved ? 'Onaylandı' : 'Reddedildi'}
-            </span>
-            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${RISK_COLORS[evaluation.riskLevel]}`}>
-              {RISK_CATEGORY_LABELS[evaluation.riskLevel]}
-            </span>
-          </div>
-          {evaluation.isApproved && (
-            <div className="grid grid-cols-3 gap-2">
+      {evaluation && (() => {
+        const totalPayable = Math.round(evaluation.monthlyInstallmentEstimate * form.term * 100) / 100;
+        const totalInterest = Math.round((totalPayable - form.principalAmount) * 100) / 100;
+        const endDate = (() => {
+          const d = new Date(form.startDate);
+          d.setMonth(d.getMonth() + form.term);
+          return d.toISOString().split('T')[0];
+        })();
+        const termLabel = form.term < 12
+          ? `${form.term} ay`
+          : form.term % 12 === 0
+            ? `${form.term / 12} yıl (${form.term} ay)`
+            : `${form.term} ay`;
+
+        return (
+          <div className={`rounded-lg border text-sm overflow-hidden ${evaluation.isApproved ? 'border-green-200' : 'border-red-200'}`}>
+            {/* Başlık */}
+            <div className={`px-4 py-2.5 flex items-center justify-between ${evaluation.isApproved ? 'bg-green-100' : 'bg-red-100'}`}>
+              <span className={`font-bold ${evaluation.isApproved ? 'text-green-700' : 'text-red-700'}`}>
+                {evaluation.isApproved ? 'Kredi Onaylandı' : 'Kredi Reddedildi'}
+              </span>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${RISK_COLORS[evaluation.riskLevel]}`}>
+                {RISK_CATEGORY_LABELS[evaluation.riskLevel]}
+              </span>
+            </div>
+
+            <div className={`px-4 py-3 space-y-3 ${evaluation.isApproved ? 'bg-green-50' : 'bg-red-50'}`}>
+              {/* Red sebebi */}
+              {!evaluation.isApproved && evaluation.rejectionReason && (
+                <p className="text-xs font-medium text-red-600 bg-red-100 rounded px-2 py-1.5">
+                  {evaluation.rejectionReason}
+                </p>
+              )}
+
+              {/* Finansal özet */}
               <div>
-                <p className="text-[#64748B] text-xs">Vade Oranı</p>
-                <p className="font-semibold text-[#0F172A]">{evaluation.approvedRateAmount}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B] mb-1.5">Finansal Özet</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <EvalCell label="İstenen Tutar" value={formatCurrency(form.principalAmount)} />
+                  <EvalCell label="Toplam Ödenecek" value={formatCurrency(totalPayable)} highlight={evaluation.isApproved} />
+                  <EvalCell label="Aylık Taksit" value={formatCurrency(evaluation.monthlyInstallmentEstimate)} highlight={evaluation.isApproved} />
+                  <EvalCell label="Toplam Faiz" value={formatCurrency(totalInterest)} />
+                </div>
               </div>
+
+              {/* Vade bilgileri */}
               <div>
-                <p className="text-[#64748B] text-xs">Aylık Taksit</p>
-                <p className="font-semibold text-[#1B4FD8]">{formatCurrency(evaluation.monthlyInstallmentEstimate)}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B] mb-1.5">Vade Bilgileri</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <EvalCell label="Başlangıç" value={formatDate(form.startDate)} />
+                  <EvalCell label="Bitiş" value={formatDate(endDate)} />
+                  <EvalCell label="Vade Süresi" value={termLabel} />
+                </div>
               </div>
+
+              {/* Oran & skor */}
               <div>
-                <p className="text-[#64748B] text-xs">Kredi Skoru</p>
-                <p className="font-semibold text-[#0F172A]">{evaluation.creditScore}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B] mb-1.5">Değerlendirme</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <EvalCell label="Vade Oranı" value={evaluation.isApproved ? `${evaluation.approvedRateAmount}` : '—'} />
+                  <EvalCell label="Kredi Skoru" value={`${evaluation.creditScore}`} />
+                  <EvalCell label="Borç/Gelir" value={`%${(evaluation.debtToIncomeRatio * 100).toFixed(1)}`} />
+                </div>
               </div>
             </div>
-          )}
-          {!evaluation.isApproved && evaluation.rejectionReason && (
-            <p className="text-xs text-red-600">{evaluation.rejectionReason}</p>
-          )}
-        </div>
-      )}
+          </div>
+        );
+      })()}
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onClose}>İptal</Button>
