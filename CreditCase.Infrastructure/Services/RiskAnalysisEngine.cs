@@ -6,7 +6,7 @@ using CreditCase.Domain.Interfaces;
 namespace CreditCase.Infrastructure.Services;
 
 /// <summary>
-/// CLAUDE.md §6A Risk Hesaplama Algoritması:
+///   Risk Hesaplama Algoritması:
 ///   TotalScore = Σ (rule.Evaluate() × rule.Weight)
 ///   Skor [0-100] → kategori eşiği: ≥75=Low, ≥55=Medium, ≥35=High, <35=VeryHigh
 ///
