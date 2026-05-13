@@ -277,8 +277,8 @@ Sistemde kullanılan oranlar yüzde (%) değil, decimal oran (ratio) formatında
 #### Oran Formatı Açıklaması
 
 **Yanlış (UI'de gösterilmemeli):**
-- Faiz Yüzdesi: %4.48
-- Faiz Oranı: 4.48%
+- vade farkı Yüzdesi: %4.48
+- vade farkı Oranı: 4.48%
 
 **Doğru (Profesyonel Format):**
 - Vade Oranı: 4.48 (veya 4.48x olarak gösterilebilir)

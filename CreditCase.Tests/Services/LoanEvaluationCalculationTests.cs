@@ -97,7 +97,7 @@ public class LoanEvaluationCalculationTests
 
         decimal interestAmount = totalPayable - principal;
 
-        // Faiz pozitif olmalı
+        // Vade farkı pozitif olmalı
         interestAmount.Should().BeGreaterThan(0);
         totalPayable.Should().BeGreaterThan(principal);
     }
@@ -141,7 +141,7 @@ public class LoanEvaluationCalculationTests
 
         decimal interest = totalPayable - principal;
 
-        // Büyük kredide faiz da büyük olmalı
+        // Büyük kredide vade farkı da büyük olmalı
         interest.Should().BeGreaterThan(50_000m);
         monthly.Should().BeGreaterThan(10_000m);
     }
@@ -187,7 +187,7 @@ public class LoanEvaluationCalculationTests
         balloonFinal.Should().BeGreaterThan(balloonMonthly);
     }
 
-    // ── Sıfır Faiz Durumu ──────────────────────────────────────────────────────
+    // ── Sıfır Vade Farkı Durumu ───────────────────────────────────────────────
 
     [Fact]
     public void ZeroInterestLoan_DividesEquallyByTerm()
@@ -202,7 +202,7 @@ public class LoanEvaluationCalculationTests
         total.Should().Be(principal);
     }
 
-    // ── Faiz Hesaplama Tutarlılığı ───────────────────────────────────────────
+    // ── Vade Farkı Hesaplama Tutarlılığı ─────────────────────────────────────
 
     [Fact]
     public void InterestAmount_DifferenceFromPrincipalAndTotalPayable()

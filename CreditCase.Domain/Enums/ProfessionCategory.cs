@@ -2,7 +2,7 @@ namespace CreditCase.Domain.Enums;
 
 public enum ProfessionCategory
 {
-    Government,    // Kamu — en yüksek stabilite, -1% faiz bonusu
+    Government,    // Kamu — en yüksek stabilite, -1% vade farkı bonusu
     Healthcare,    // Sağlık
     Finance,       // Finans
     Technology,    // Teknoloji

@@ -103,7 +103,7 @@ await paymentService.create({ installmentId: payTarget.id, paymentAmount: payTar
 loan.RemainingPrincipal = Math.Round(loan.PrincipalAmount / loan.Term * unpaidCount, 2);
 ```
 
-Bu formül, taksit tutarına (faiz dahil) değil yalnızca anapara bileşenine bakıyordu. Kullanıcı bakiyesini doğru okuyamıyordu.
+Bu formül, taksit tutarına (vade farkı dahil) değil yalnızca anapara bileşenine bakıyordu. Kullanıcı bakiyesini doğru okuyamıyordu.
 
 **Çözüm (sonraki):**
 ```csharp

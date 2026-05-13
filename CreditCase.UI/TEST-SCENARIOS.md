@@ -301,7 +301,7 @@ Her senaryo; **Hazırlık**, **Adımlar** ve **Beklenen Sonuç** bölümlerinden
 
 **Adımlar:**
 1. "+ Yeni Kredi" butonuna tıkla.
-2. Müşteri seç (dropdown), Kredi Türü seç, Ana Para, Faiz Oranı, Vade, Başlangıç Tarihi gir.
+2. Müşteri seç (dropdown), Kredi Türü seç, Ana Para, vade farkı Oranı, Vade, Başlangıç Tarihi gir.
 3. "Kredi Oluştur" butonuna tıkla.
 
 **Beklenen Sonuç:**

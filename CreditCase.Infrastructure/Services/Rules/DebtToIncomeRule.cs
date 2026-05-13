@@ -24,7 +24,7 @@ public class DebtToIncomeRule : IRiskAnalysisRule
                 .DefaultIfEmpty(0)
                 .Average());
 
-        // İstenen kredinin tahmini aylık ödemesi (düz faiz tahmini).
+        // İstenen kredinin tahmini aylık ödemesi (düz vade farkı tahmini).
         decimal estimatedNewMonthly = requestedTerm > 0 ? requestedAmount / requestedTerm : 0;
 
         decimal ratio = (existingMonthlyDebt + estimatedNewMonthly) / customer.MonthlyIncome;

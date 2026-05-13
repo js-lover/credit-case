@@ -21,7 +21,7 @@ public interface ILoanService
     /// Yeni kredi oluşturur ve taksit planını otomatik üretir.
     /// Oluşturma öncesi <c>CreditScoreService</c> üzerinden kredi skoru sorgulanır;
     /// sonuç <c>Approved</c> değilse <see cref="Exceptions.BusinessRuleException"/> fırlatılır.
-    /// Taksit tutarı düz faiz (flat-rate) yöntemiyle hesaplanır:
+    /// Taksit tutarı düz vade farkı (flat-rate) yöntemiyle hesaplanır:
     /// <c>monthlyAmount = ROUND(principal × (1 + rate/100 × termYears) / term, 2)</c>
     /// </summary>
     Task<LoanResponse> CreateAsync(CreateLoanRequest request);

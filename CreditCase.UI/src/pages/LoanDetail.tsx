@@ -239,9 +239,9 @@ export function LoanDetail() {
             <p className="text-xl font-bold text-gray-900 mt-1">%{annualCost.toFixed(2)}</p>
           </div>
           <div className="border-r border-gray-200 pr-4">
-            <p className="text-xs text-gray-500 font-semibold">GECİKMİŞ TRANŞ</p>
+            <p className="text-xs text-gray-500 font-semibold">GECİKMİŞ TAKSİT SAYISI</p>
             <p className={`text-xl font-bold mt-1 ${overdueCount > 0 ? 'text-red-600' : 'text-green-600'}`}>
-              {overdueCount === 0 ? '—' : `${overdueCount} taksit`}
+              {overdueCount === 0 ? '—' : `${overdueCount}`}
             </p>
           </div>
           <div>
@@ -289,7 +289,7 @@ export function LoanDetail() {
               <tr className="border-b border-[#E2E8F0] text-left text-[#64748B]">
                 <th className="px-3 py-3 font-medium">#</th>
                 <th className="px-3 py-3 font-medium text-right">Anapara</th>
-                <th className="px-3 py-3 font-medium text-right">Net Faiz</th>
+                <th className="px-3 py-3 font-medium text-right">Net Vade Farkı</th>
                 <th className="px-3 py-3 font-medium text-right text-amber-600">KKDF</th>
                 <th className="px-3 py-3 font-medium text-right text-amber-600">BSMV</th>
                 <th className="px-3 py-3 font-medium text-right text-[#1B4FD8]">Taksit</th>

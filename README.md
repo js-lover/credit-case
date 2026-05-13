@@ -432,7 +432,7 @@ Toplam Puan = Σ (Kural[i].Evaluate() × Kural[i].Weight)
 
 Risk kategorisi toplam puana göre belirlenir:
 
-| Toplam Puan | Risk Kategorisi | Faiz Etkisi |
+| Toplam Puan | Risk Kategorisi | vade farkı Etkisi |
 |---|---|---|
 | ≥ 75 | Düşük (Low) | Risk primi: +0% |
 | ≥ 55 | Orta (Medium) | Risk primi: +5% |
@@ -456,9 +456,9 @@ flowchart LR
     AR --> SUM
     ES --> SUM
 
-    SUM -->|"≥ 75"| LOW["Low Risk\nFaiz +0%"]
-    SUM -->|"55-74"| MED["Medium Risk\nFaiz +5%"]
-    SUM -->|"35-54"| HIGH["High Risk\nFaiz +12%"]
+    SUM -->|"≥ 75"| LOW["Low Risk\nvade farkı +0%"]
+    SUM -->|"55-74"| MED["Medium Risk\nvade farkı +5%"]
+    SUM -->|"35-54"| HIGH["High Risk\nvade farkı +12%"]
     SUM -->|"< 35"| VHIGH["VeryHigh\nRed"]
 
     style LOW fill:#86efac,color:#14532d
@@ -568,7 +568,7 @@ flowchart TD
 
 ## Taksit Hesaplama
 
-Faiz oranı belirlendikten sonra taksit planı iki strateji sınıfından biri ile üretilir.
+vade farkı oranı belirlendikten sonra taksit planı iki strateji sınıfından biri ile üretilir.
 
 ### Standart Plan — `StandardInstallmentStrategy`
 
@@ -669,7 +669,7 @@ Balon   │ 0.6A │ 0.6A │ 0.6A │ 0.6A │  A×n − 0.6A×(n-1)  │  Ayn�
                  ↑ düşük aylık                  ↑ BALON (son taksit)
 ```
 
-> **Toplam ödeme her iki planda da eşittir** — erteleme faizi farklı dağıtılır, maliyet aynıdır.
+> **Toplam ödeme her iki planda da eşittir** — erteleme vade farkıi farklı dağıtılır, maliyet aynıdır.
 
 ---
 
@@ -883,7 +883,7 @@ customer.CreditScoreBonus = Math.Clamp(customer.CreditScoreBonus + delta, -200, 
 // Nihai skor = Math.Clamp(baseScore + CreditScoreBonus, 0, 1900)
 ```
 
-Düzenli ödeme yapan bir müşteri zaman içinde kredi skorunu artırabilir; bu da sonraki başvurularda daha iyi faiz oranına yol açar.
+Düzenli ödeme yapan bir müşteri zaman içinde kredi skorunu artırabilir; bu da sonraki başvurularda daha iyi vade farkı oranına yol açar.
 
 ---
 
@@ -945,7 +945,7 @@ flowchart TD
 
 | Method | Endpoint | Açıklama | Başarı Kodu |
 |---|---|---|---|
-| POST | `/api/loans/evaluate` | Kredi başvurusunu değerlendir (risk + faiz hesabı) | 200 |
+| POST | `/api/loans/evaluate` | Kredi başvurusunu değerlendir (risk + vade farkı hesabı) | 200 |
 | GET | `/api/loans/maximum-eligibility/{customerId}` | Müşterinin maksimum uygun kredi tutarını getir | 200 |
 | GET | `/api/loans/evaluation/{evaluationId}` | Değerlendirme kaydını getir | 200 |
 | GET | `/api/customers/{customerId}/evaluations` | Müşteriye ait değerlendirme geçmişini getir | 200 |
@@ -1222,7 +1222,7 @@ Bu projede yapay zeka destekli geliştirme yaklaşımı, belirli bir disiplin ç
 |---|---|
 | Mimari tasarım | Clean Architecture katman sorumluluklarının belirlenmesinde referans olarak kullanıldı |
 | Risk motoru tasarımı | Ağırlıklı kural motoru yaklaşımı tartışıldı; kuralların bağımsız sınıflara bölünmesi kararı AI önerisiyle şekillendi |
-| Faiz hesaplama | Dinamik faiz bileşenleri (risk/vade/tutar primleri) ve gerçekçi Türk bankacılığı bantları AI ile belirlendi |
+| vade farkı hesaplama | Dinamik vade farkı bileşenleri (risk/vade/tutar primleri) ve gerçekçi Türk bankacılığı bantları AI ile belirlendi |
 | Kredi skoru modelleme | 4 bileşenli profil bazlı skor algoritması AI ile tasarlandı; bantlar gerçek bankacılık referanslarına göre uyarlandı |
 | EF Core konfigürasyonu | `HasPrecision`, `HasConversion<string>`, filtered unique index gibi konfigürasyon detayları AI yardımıyla hızlıca oluşturuldu |
 | FluentValidation kuralları | Tutar-vade çapraz kural, TC/telefon format kuralları AI önerisiyle yazıldı ve domain'e uyarlandı |

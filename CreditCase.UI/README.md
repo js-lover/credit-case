@@ -116,7 +116,7 @@ src/
 - Müşteriye ait krediler tablosu
 
 ### Krediler `/loans`
-- Tüm krediler listesi (müşteri adı, tür, anapara, faiz, vade, kalan)
+- Tüm krediler listesi (müşteri adı, tür, anapara, vade farkı, vade, kalan)
 - Yeni kredi oluşturma formu (müşteri dropdown, LoanType seçimi)
 
 ### Kredi Detayı `/loans/:id`

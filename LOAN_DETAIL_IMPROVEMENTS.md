@@ -13,10 +13,10 @@ Bu dönem, UI tarafında kredi değerlendirmesi hesaplamalarını kontrol ettim,
 #### Test Kapsamı:
 - ✅ Aylık taksit tutarı (Amortizasyon formülü)
 - ✅ Toplam ödenecek tutar
-- ✅ Faiz hesaplamları
+- ✅ vade farkı hesaplamları
 - ✅ Kalan anapara hesaplaması
 - ✅ Uzun vadeli kredi hesaplaması (36-60 ay)
-- ✅ Sıfır faiz senaryosu
+- ✅ Sıfır vade farkı senaryosu
 - ✅ Balon ödeme senaryosu
 - ✅ Borç-gelir oranı hesaplaması
 - ✅ Para birimi hassasiyeti (2 ondalak)
@@ -38,7 +38,7 @@ Bu dönem, UI tarafında kredi değerlendirmesi hesaplamalarını kontrol ettim,
 #### Kredi Hesaplama Utilityleri (`loanCalculations.ts`):
 ```typescript
 - calculateMonthlyInstallment()      // Aylık taksit (amortizasyon)
-- calculateTotalInterest()           // Toplam faiz
+- calculateTotalInterest()           // Toplam vade farkı
 - convertMonthlyToAnnualRate()       // Aylık → Yıllık oran
 - calculateDebtToIncomeRatio()       // Borç/Gelir oranı
 - calculatePaymentPercentage()       // Ödeme yüzdesi
@@ -60,19 +60,19 @@ Bu dönem, UI tarafında kredi değerlendirmesi hesaplamalarını kontrol ettim,
 
 2. **Finansal Detaylar Kartları**
    - Ana Para
-   - Toplam Ödenecek (Faiz dahil)
+   - Toplam Ödenecek (vade farkı dahil)
    - Ödenen / Kalan
    - Vade Oranı (Aylık %)
 
 3. **Ek Kredi Detayları**
-   - Toplam Faiz
+   - Toplam vade farkı
    - Gecikmiş Tranş Sayısı
    - Ödemenin Yüzdesi
 
 4. **Uyarılar Bölümü**
    - Gecikmiş taksit uyarıları
    - Kredi tamamlanma durumu
-   - Yüksek faiz oranı uyarıları
+   - Yüksek vade farkı oranı uyarıları
    - Hesaplama hataları
 
 ### 3. Hesaplama Doğruluğu
@@ -87,13 +87,13 @@ M = P × (r(1+r)^n) / ((1+r)^n - 1)
 - Vade: 12 ay
 - Aylık Taksit: ~1.204,87 TL
 - Toplam Ödenecek: ~14.458,48 TL
-- Toplam Faiz: ~2.458,48 TL
+- Toplam vade farkı: ~2.458,48 TL
 ```
 
 #### Hesaplanan Metrikleri Kontrol
 - ✅ Taksit tutarları doğru hesaplanmış
 - ✅ Taksit toplamı = Toplam ödenecek tutar
-- ✅ Faiz = Toplam ödenecek - Ana para
+- ✅ vade farkı = Toplam ödenecek - Ana para
 - ✅ Para birimi 2 ondalak hassasiyeti
 - ✅ Uzun vadeli krediler doğru hesaplanmış
 
@@ -102,12 +102,12 @@ M = P × (r(1+r)^n) / ((1+r)^n - 1)
 #### Tespit Edilen Hatalar:
 1. ✅ **Balon Ödeme Hesaplaması**: Son taksit daha yüksek olmalı (düzeltildi)
 2. ✅ **Tarih Hesaplaması**: Bitiş tarihi başlangıç + vade (düzeltildi)
-3. ✅ **Yüzde Gösterimi**: Aylık faiz oranı yüzde olarak gösterilmeli (düzeltildi)
+3. ✅ **Yüzde Gösterimi**: Aylık vade farkı oranı yüzde olarak gösterilmeli (düzeltildi)
 
 #### Validasyon Kontrolleri:
 - Taksit sayısı = Vade sayısı
 - Taksit toplamı = Toplam ödenecek
-- Faiz ≥ 0
+- vade farkı ≥ 0
 - Vade > 0
 
 ### 5. UI/UX İyileştirmeleri
@@ -121,7 +121,7 @@ M = P × (r(1+r)^n) / ((1+r)^n - 1)
 #### Bilgi Hiyerarşisi:
 1. **En Üst**: Kredi temel bilgileri (tarih, durum, vade)
 2. **İkinci**: Finansal metrikler (anapara, toplam, vade oranı)
-3. **Üçüncü**: Ek detaylar (faiz, gecikme, ilerleme)
+3. **Üçüncü**: Ek detaylar (vade farkı, gecikme, ilerleme)
 4. **Dördüncü**: Uyarılar ve hata mesajları
 
 ## Teknik Detaylar
@@ -146,7 +146,7 @@ Adres: `http://localhost:5174`
 2. **Taksit Planlama**: Erken ödeme senaryolarını hesapla
 3. **Grafik Gösterimi**: Ödeme ilerleme grafiği
 4. **İhracat**: CSV/Excel formatında taksit planı
-5. **Comparator**: Farklı faiz oranlarıyla kredi karşılaştırması
+5. **Comparator**: Farklı vade farkı oranlarıyla kredi karşılaştırması
 
 ## Dosya Değişiklikleri
 
@@ -163,20 +163,20 @@ Adres: `http://localhost:5174`
 
 ### Test 1: Standart 12 Aylık Kredi
 - Ana Para: 12.000 TL
-- Faiz Oranı: %3.0 aylık
+- vade farkı Oranı: %3.0 aylık
 - Beklenen Aylık Taksit: ~1.204,87 TL
 - Beklenen Toplam: ~14.458,48 TL
 - ✅ Geçiyor
 
 ### Test 2: 36 Aylık Uzun Vadeli Kredi
 - Ana Para: 50.000 TL
-- Faiz Oranı: %3.5 aylık
+- vade farkı Oranı: %3.5 aylık
 - Beklenen Aylık Taksit: ~1.662,42 TL
 - ✅ Geçiyor
 
-### Test 3: Sıfır Faiz
+### Test 3: Sıfır vade farkı
 - Ana Para: 12.000 TL
-- Faiz Oranı: %0.0
+- vade farkı Oranı: %0.0
 - Beklenen Aylık Taksit: 1.000 TL (12.000 / 12)
 - ✅ Geçiyor
 

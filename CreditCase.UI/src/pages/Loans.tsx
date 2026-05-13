@@ -335,7 +335,7 @@ function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
 
               {/* Oran & maliyet */}
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B] mb-1.5">Faiz & Maliyet</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B] mb-1.5">Vade Farkı & Maliyet</p>
                 <div className="grid grid-cols-4 gap-2">
                   <EvalCell label="Net Oran (Aylık)" value={evaluation.isApproved ? `${evaluation.approvedRateAmount}` : '—'} />
                   <EvalCell label="Brüt Oran (Aylık)" value={evaluation.isApproved ? `${evaluation.grossRateAmount}` : '—'} />
@@ -363,7 +363,7 @@ function CreateLoanForm({ customers, onSubmit, onClose, loading }: {
                           <tr className="bg-white/60 text-[#64748B] border-b border-white/40">
                             <th className="px-2 py-1.5 text-left font-medium">#</th>
                             <th className="px-2 py-1.5 text-right font-medium">Anapara</th>
-                            <th className="px-2 py-1.5 text-right font-medium">Faiz</th>
+                            <th className="px-2 py-1.5 text-right font-medium">Vade Farkı</th>
                             <th className="px-2 py-1.5 text-right font-medium text-amber-700">KKDF</th>
                             <th className="px-2 py-1.5 text-right font-medium text-amber-700">BSMV</th>
                             <th className="px-2 py-1.5 text-right font-medium text-[#1B4FD8]">Toplam</th>

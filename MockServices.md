@@ -277,7 +277,7 @@ flowchart LR
 
 Müşterinin `ScoreCategory`'sine, talep edilen kredi türüne, vade süresine ve meslek/istihdam durumuna göre **vade oranını** (ratio formatında) hesaplar.
 
-> **Önemli:** Sonuç yüzde (`%`) değil, **ratio**'dur. `3.25` yazan yerde "%3.25 faiz" değil, "3.25 vade oranı" okunur. Bu, uluslararası fintech standartlarına uygun profesyonel gösterimdir.
+> **Önemli:** Sonuç yüzde (`%`) değil, **ratio**'dur. `3.25` yazan yerde "%3.25 vade farkı" değil, "3.25 vade oranı" okunur. Bu, uluslararası fintech standartlarına uygun profesyonel gösterimdir.
 
 ### 3 Aşamalı Hesaplama
 
@@ -434,7 +434,7 @@ MaximumAmount  = Min(120.000, 134.400, 1.000.000) = 120.000 ₺
 
 ### Amaç
 
-Onaylanan kredinin taksit planını **amortisasyon (azalan bakiye) yöntemiyle** üretir. Her taksit eşit tutardadır; ancak içindeki anapara/faiz paylaşımı değişir.
+Onaylanan kredinin taksit planını **amortisasyon (azalan bakiye) yöntemiyle** üretir. Her taksit eşit tutardadır; ancak içindeki anapara/vade farkı paylaşımı değişir.
 
 ### Amortisasyon Formülü
 
@@ -485,7 +485,7 @@ Toplam Ödeme: 24 × 2.164 = 51.936 ₺
 Toplam Ek Ödeme: 51.936 − 50.000 = 1.936 ₺
 ```
 
-Amortisasyonun başlangıçta faiz payı yüksek, anapara payı düşük olması normaldir; vade ilerledikçe bu oran tersine döner.
+Amortisasyonun başlangıçta vade farkı payı yüksek, anapara payı düşük olması normaldir; vade ilerledikçe bu oran tersine döner.
 
 ### RemainingPrincipal Güncellemesi
 
@@ -497,7 +497,7 @@ loan.RemainingPrincipal = loan.Installments
     .Sum(i => i.Amount);
 ```
 
-Bu yaklaşım gerçek kalan ödeme yükümlülüğünü (faiz dahil) yansıtır.
+Bu yaklaşım gerçek kalan ödeme yükümlülüğünü (vade farkı dahil) yansıtır.
 
 ---
 

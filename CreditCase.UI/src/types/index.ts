@@ -105,7 +105,7 @@ export interface LoanResponse {
   startDate: string;
   status: LoanStatus;
   remainingPrincipal: number; // ödenmemiş taksitlerin toplamı
-  totalPayableAmount: number; // faiz dahil toplam geri ödeme
+  totalPayableAmount: number; // vade farkı dahil toplam geri ödeme
   installments: InstallmentResponse[];
 }
 

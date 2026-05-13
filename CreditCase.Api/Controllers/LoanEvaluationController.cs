@@ -20,7 +20,7 @@ public class LoanEvaluationController : ControllerBase
     }
 
     /// <summary>
-    /// Kredi başvurusunu değerlendirir: risk analizi, faiz hesabı, onay/red kararı.
+    /// Kredi başvurusunu değerlendirir: risk analizi, vade farkı hesabı, onay/red kararı.
     /// Sonuç her durumda (onay veya red) veritabanına kaydedilir.
     /// </summary>
     /// <response code="200">Değerlendirme tamamlandı (onay veya red bilgisi içerir)</response>

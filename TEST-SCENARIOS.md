@@ -122,7 +122,7 @@ RemainingPrincipal = unpaid installments'ların Sum(Amount)
 → 1 taksit ödendi: RemainingPrincipal = 11 × 1.120 = 12.320 TL
 ```
 
-> **Önceki formül:** `Round(PrincipalAmount / Term × unpaidCount, 2)` yalnızca anapara bileşenini hesaplıyordu ve faizi dışarıda bırakıyordu. Kullanıcı kalan borcu doğru okuyamıyordu. Düzeltme: `Sum(i.Amount)` gerçek kalan ödeme yükümlülüğünü yansıtır.
+> **Önceki formül:** `Round(PrincipalAmount / Term × unpaidCount, 2)` yalnızca anapara bileşenini hesaplıyordu ve vade farkıi dışarıda bırakıyordu. Kullanıcı kalan borcu doğru okuyamıyordu. Düzeltme: `Sum(i.Amount)` gerçek kalan ödeme yükümlülüğünü yansıtır.
 
 ### İdempotency — çift koruma katmanı (K-16)
 

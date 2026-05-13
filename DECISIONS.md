@@ -82,11 +82,11 @@ Vade oranı belirlendikten sonra taksit planı **amortisasyon (azalan bakiye)** 
 
 ```
 grossRate = rateAmount × (1 + 0.15 + 0.05)   // KKDF + BSMV dahil brüt oran
-r = grossRate / 100                            // aylık faiz oranı (ondalık)
+r = grossRate / 100                            // aylık vade farkı oranı (ondalık)
 A = P × r(1+r)^n / [(1+r)^n − 1]
 ```
 
-**Gerekçe:** Düz faiz (flat-rate) başlangıçta kullanılmıştı; ancak projenin spec'inde (claude.md §6A) amortisasyon formülü açıkça belirtilmiş ve örnek hesaplamalar bu yöntemle örtüşmektedir. Amortisasyon, azalan anaparayı daha gerçekçi modeller ve bankacılık endüstrisinin fiilen kullandığı yöntemdir. `rateAmount` aylık net oran olduğundan `/12` bölme işlemi gerekmez; yıllık bir oranı aylığa çevirmek söz konusu değildir.
+**Gerekçe:** Düz vade farkı (flat-rate) başlangıçta kullanılmıştı; ancak projenin spec'inde (claude.md §6A) amortisasyon formülü açıkça belirtilmiş ve örnek hesaplamalar bu yöntemle örtüşmektedir. Amortisasyon, azalan anaparayı daha gerçekçi modeller ve bankacılık endüstrisinin fiilen kullandığı yöntemdir. `rateAmount` aylık net oran olduğundan `/12` bölme işlemi gerekmez; yıllık bir oranı aylığa çevirmek söz konusu değildir.
 
 ---
 
@@ -150,7 +150,7 @@ int finalScore = Math.Clamp(baseScore + customer.CreditScoreBonus, 0, 1900);
 
 - ID'ye dayalı belirleyici değer üretmek test ortamında mantıklı görünse de demo ve sunum senaryolarında aynı profil farklı ID'lerle farklı sonuç verebilir; bu tutarsızlık açıklaması güçtür.
 - Gerçek profil bazlı hesap, `DateOfBirth`, `MonthlyIncome`, `EmploymentStatus`, `ProfessionCategory` alanlarının Customer entity'sinde taşınması için somut bir motivasyon yaratır.
-- Sunum sırasında "bu müşteri neden bu faiz oranını aldı?" sorusuna cevap verilebilir.
+- Sunum sırasında "bu müşteri neden bu vade farkı oranını aldı?" sorusuna cevap verilebilir.
 
 **Gerekçe (OCP):** Gerçek kredi skoru entegrasyonu hazır olduğunda yalnızca `Infrastructure` katmanına yeni bir implementasyon eklenir; `LoanEvaluationService` hiçbir değişiklik gerektirmez.
 
@@ -425,7 +425,7 @@ Bu yaklaşım iki temel sorunu çözer:
 **Gerekçe:** Bankacılık sistemlerinde sıralı ödeme zorunludur çünkü:
 
 1. Gecikmiş borcun öncelikli tahsil edilmesi yasal gerekliliktir.
-2. Faiz muhasebesi "en eski borcun ilk ödenmesi" varsayımıyla çalışır.
+2. vade farkı muhasebesi "en eski borcun ilk ödenmesi" varsayımıyla çalışır.
 3. Overdue takip mekanizması sıradan bağımsız düşünülemez — hangi taksitin geciktiği bilgisi ancak önceki tüm taksitler ödenmiş ise anlamlıdır.
 
 **Uygulama:**
@@ -448,8 +448,8 @@ if (hasEarlierUnpaid)
 
 **Gerekçe:** Statik profil verisine (yaş, gelir, meslek) dayalı skor zamanla değişmez; bu da tüm müşterileri kendi profil bantlarında sabit tutar. Ödeme bonusu sayesinde:
 
-- Düzenli ödeme yapan müşteri zamanla daha iyi faiz oranı kazanabilir.
-- Ödemeleri aksatan müşterinin skoru düşer, sonraki başvurularda daha yüksek faiz veya red ile karşılaşır.
+- Düzenli ödeme yapan müşteri zamanla daha iyi vade farkı oranı kazanabilir.
+- Ödemeleri aksatan müşterinin skoru düşer, sonraki başvurularda daha yüksek vade farkı veya red ile karşılaşır.
 - Bu mekanizma gerçek bankacılık sistemlerindeki kredi davranış skorlamasını (behavioral scoring) basit bir şekilde modeller.
 
 **Neden ±200 ile sınırlandı:** Baz skor maksimumu 800'dür. Bonus [−200, +200] aralığı, ödeme geçmişinin etkisini belirgin (%20) ama dominant olmayan bir seviyede tutmak için seçilmiştir. Tek başına ödeme davranışı müşteriyi Low'dan VeryHigh'a taşıyamaz; profil belirleyici olmaya devam eder.
@@ -473,11 +473,11 @@ brüt oran = net oran × (1 + 0.15 + 0.05) = net oran × 1.20
 Her taksit satırı aşağıdaki bileşenlere ayrıştırılır:
 
 ```
-Brüt Faiz   = Kalan Bakiye × (brüt oran / 100)
-Net Faiz    = Brüt Faiz / 1.20
-KKDF        = Net Faiz × 0.15
-BSMV        = Net Faiz × 0.05
-Anapara     = Taksit - Brüt Faiz
+Brüt vade farkı   = Kalan Bakiye × (brüt oran / 100)
+Net vade farkı    = Brüt vade farkı / 1.20
+KKDF        = Net vade farkı × 0.15
+BSMV        = Net vade farkı × 0.05
+Anapara     = Taksit - Brüt vade farkı
 ```
 
 UI'de hem `LoanEvaluationService`'in ürettiği amortisman önizleme tablosu hem de `LoanDetail` sayfasındaki gerçek taksit tablosu bu dökümü gösterir.

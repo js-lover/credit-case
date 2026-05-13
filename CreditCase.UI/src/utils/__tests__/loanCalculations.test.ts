@@ -62,10 +62,10 @@ describe('Kredi Hesaplama Fonksiyonları', () => {
     });
   });
 
-  // ── Faiz Hesaplamması ─────────────────────────────────────────────────────
+  // ── Vade Farkı Hesaplaması ────────────────────────────────────────────────
 
   describe('calculateTotalInterest', () => {
-    it('Faiz = Toplam - Anapara', () => {
+    it('Vade Farkı = Toplam - Anapara', () => {
       const totalPayable = 14_458.48;
       const principal = 12_000;
 
@@ -75,7 +75,7 @@ describe('Kredi Hesaplama Fonksiyonları', () => {
       expect(interest).toBeCloseTo(2458.48, 1);
     });
 
-    it('Negatif faiz durumunda negatif değer', () => {
+    it('Negatif vade farkı durumunda negatif değer', () => {
       const totalPayable = 10_000;
       const principal = 12_000;
 
@@ -203,7 +203,7 @@ describe('Kredi Hesaplama Fonksiyonları', () => {
       expect(result.errors[0]).toContain('Taksit sayısı hatalı');
     });
 
-    it('Negatif faiz hatası tespit et', () => {
+    it('Negatif vade farkı hatası tespit et', () => {
       const mockLoan: Partial<LoanResponse> = {
         term: 12,
         principalAmount: 12_000,
@@ -243,7 +243,7 @@ describe('Kredi Hesaplama Fonksiyonları', () => {
       expect(warnings.some(w => w.includes('gecikmiş'))).toBe(true);
     });
 
-    it('Yüksek faiz oranı uyarısı', () => {
+    it('Yüksek vade farkı oranı uyarısı', () => {
       const mockLoan: Partial<LoanResponse> = {
         term: 12,
         rateAmount: 6.0, // %5 üzerinde

@@ -186,7 +186,7 @@ public class LoanEvaluationService : ILoanEvaluationService
     }
 
     /// <summary>
-    /// Her taksit için Anapara / Net Faiz / KKDF / BSMV dökümünü üretir.
+    /// Her taksit için Anapara / Net Vade Farkı / KKDF / BSMV dökümünü üretir.
     /// </summary>
     private static List<InstallmentPlanRow> GenerateAmortizationTable(
         decimal principal, decimal netRateAmount, int termMonths)

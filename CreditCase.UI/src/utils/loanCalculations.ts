@@ -3,7 +3,7 @@ import { formatCurrency } from './formatters';
 
 /**
  * Kredi hesaplama yardımcıları
- * Amortizasyon formülü ve faiz hesaplamaları
+ * Amortizasyon formülü ve vade farkı hesaplamaları
  */
 
 /** Aylık taksit tutarını hesapla (Amortizasyon) */
@@ -22,7 +22,7 @@ export const calculateMonthlyInstallment = (
   return Math.round(monthly * 100) / 100;
 };
 
-/** Toplam faiz miktarını hesapla */
+/** Toplam vade farkı miktarını hesapla */
 export const calculateTotalInterest = (totalPayable: number, principal: number): number => {
   return Math.round((totalPayable - principal) * 100) / 100;
 };
@@ -116,7 +116,7 @@ export const validateInstallmentPlan = (loan: LoanResponse): { valid: boolean; e
   }
 
   if (loan.rateAmount < 0) {
-    errors.push('Aylık faiz oranı negatif olamaz');
+    errors.push('Aylık vade farkı oranı negatif olamaz');
   }
 
   return {

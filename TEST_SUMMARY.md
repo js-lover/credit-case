@@ -13,9 +13,9 @@
 
 1. **LoanCalculationTests.cs** (5 test)
    - Aylık taksit hesaplaması
-   - Toplam faiz hesaplaması
+   - Toplam vade farkı hesaplaması
    - Uzun vadeli kredi hesaplaması
-   - Sıfır faiz senaryosu
+   - Sıfır vade farkı senaryosu
    - Kalan anapara hesaplaması
 
 2. **LoanEvaluationCalculationTests.cs** (16 test)
@@ -51,7 +51,7 @@ formatNumber(1000000)           → "1.000.000"
 calculateMonthlyInstallment(12000, 3.0, 12)
 → 1204.87 TL
 
-// Faiz hesaplama
+// vade farkı hesaplama
 calculateTotalInterest(14458.48, 12000)
 → 2458.48 TL
 
@@ -77,13 +77,13 @@ getLoanWarnings(loan)
 ┌──────────────┬──────────────┬──────────────┬──────────────┐
 │ Ana Para     │ Toplam Ödeme │ Ödenen/Kalan │ Vade Oranı   │
 │ 12.000,00 ₺  │ 14.458,48 ₺  │ 0/12.000,00₺ │ %3.00        │
-│              │ Faiz: 2.458₺ │ 12 / 12 tak. │ Aylık        │
+│              │ vade farkı: 2.458₺ │ 12 / 12 tak. │ Aylık        │
 └──────────────┴──────────────┴──────────────┴──────────────┘
 
 ┌────────────────────────────────────────────────────────┐
 │ Ek Detaylar                                            │
 │ ┌──────────────┬──────────────┬──────────────────────┐ │
-│ │ Toplam Faiz  │ Gecikmiş     │ Ödemenin %'si       │ │
+│ │ Toplam vade farkı  │ Gecikmiş     │ Ödemenin %'si       │ │
 │ │ 2.458,48 ₺   │ —            │ 0%                  │ │
 │ └──────────────┴──────────────┴──────────────────────┘ │
 └────────────────────────────────────────────────────────┘
@@ -91,7 +91,7 @@ getLoanWarnings(loan)
 ┌────────────────────────────────────────────────────────┐
 │ ⚠️ Önemli Bilgiler (Varsa)                             │
 │ • Kredi neredeyse tamamlanmış durumda                  │
-│ ✗ Aylık faiz oranı %5 üzerinde (yüksek)              │
+│ ✗ Aylık vade farkı oranı %5 üzerinde (yüksek)              │
 └────────────────────────────────────────────────────────┘
 
 Taksit Planı tablosu (en alt)
@@ -130,7 +130,7 @@ Formül: M = P × (r(1+r)^n) / ((1+r)^n - 1)
 ├─ Payda:               0.42576
 ├─ Aylık Taksit (M):    1.204,87 TL ✅
 ├─ Toplam Ödenecek:     14.458,48 TL ✅
-└─ Toplam Faiz:         2.458,48 TL ✅
+└─ Toplam vade farkı:         2.458,48 TL ✅
 ```
 
 ## 🧪 Test Senaryoları
@@ -143,7 +143,7 @@ Vade: 12 ay
 ─────────────────────
 Aylık Taksit: ~1.204,87 TL
 Toplam Ödeme: ~14.458,48 TL
-Toplam Faiz: ~2.458,48 TL
+Toplam vade farkı: ~2.458,48 TL
 Status: ✅ BAŞARILI
 ```
 
@@ -155,11 +155,11 @@ Vade: 60 ay
 ─────────────────────
 Aylık Taksit: ~1.144,69 TL
 Toplam Ödeme: ~68.681,39 TL
-Toplam Faiz: ~18.681,39 TL
+Toplam vade farkı: ~18.681,39 TL
 Status: ✅ BAŞARILI
 ```
 
-### Senaryo 3: Sıfır Faiz Kredisi
+### Senaryo 3: Sıfır vade farkı Kredisi
 ```
 Ana Para: 12.000 TL
 Oran: %0 aylık
@@ -167,7 +167,7 @@ Vade: 12 ay
 ─────────────────────
 Aylık Taksit: 1.000,00 TL
 Toplam Ödeme: 12.000,00 TL
-Toplam Faiz: 0,00 TL
+Toplam vade farkı: 0,00 TL
 Status: ✅ BAŞARILI
 ```
 

@@ -11,7 +11,7 @@ Kredi Case uygulamasında UI tarafında kredi değerlendirmesi hesaplamalarını
 ### 1. ✅ Hesaplamalar Kontrol Edildi
 - Amortizasyon formülü doğrulanmıştır
 - Taksit hesaplamalarından sonuçlar doğrulanmıştır
-- Toplam ödeme ve faiz hesaplamaları kontrol edilmiştir
+- Toplam ödeme ve vade farkı hesaplamaları kontrol edilmiştir
 - Kalan anapara ve ödeme oranları validasyonu yapılmıştır
 
 ### 2. ✅ Kapsamlı Testler Yazıldı
@@ -42,14 +42,14 @@ Kredi Case uygulamasında UI tarafında kredi değerlendirmesi hesaplamalarını
 **2. Finansal Detaylar**
 ```
 ├─ Ana Para:           12.000,00 ₺
-├─ Toplam Ödenecek:    14.458,48 ₺ (Faiz: 2.458,48 ₺)
+├─ Toplam Ödenecek:    14.458,48 ₺ (vade farkı: 2.458,48 ₺)
 ├─ Ödenen / Kalan:     0,00 ₺ / 12.000,00 ₺ (0/12 taksit)
 └─ Vade Oranı:         %3.00 Aylık
 ```
 
 **3. Ek Detaylar**
 ```
-├─ Toplam Faiz:        2.458,48 ₺
+├─ Toplam vade farkı:        2.458,48 ₺
 ├─ Gecikmiş Tranş:     — (Gecikme yok)
 └─ Ödemenin Yüzdesi:   0%
 ```
@@ -58,7 +58,7 @@ Kredi Case uygulamasında UI tarafında kredi değerlendirmesi hesaplamalarını
 ```
 ⚠️ Önemli Bilgiler:
   • Kredi neredeyse tamamlanmış durumda
-  ✗ Aylık faiz oranı %5 üzerinde (yüksek)
+  ✗ Aylık vade farkı oranı %5 üzerinde (yüksek)
   ✗ 2 taksit gecikmiş durumda
 ```
 
@@ -77,10 +77,10 @@ Toplam Test: 59
 ### Test Kapsamı
 ```
 ✅ Aylık Taksit Hesaplaması (Amortizasyon)
-✅ Toplam Faiz Hesaplaması
+✅ Toplam vade farkı Hesaplaması
 ✅ Kalan Anapara Hesaplaması
 ✅ Uzun Vadeli Kredi (60 ay)
-✅ Sıfır Faiz Senaryosu
+✅ Sıfır vade farkı Senaryosu
 ✅ Balon Ödeme Senaryosu
 ✅ Borç-Gelir Oranı
 ✅ Taksit Planı Validasyonu
@@ -106,7 +106,7 @@ M = P × (r(1+r)^n) / ((1+r)^n - 1)
 
 Temel Parametreler:
 ├─ P: Ana Para (Principal)
-├─ r: Aylık Faiz Oranı (Monthly Rate)
+├─ r: Aylık vade farkı Oranı (Monthly Rate)
 └─ n: Vade (Term in Months)
 
 Örnek Hesaplama:
@@ -123,8 +123,8 @@ Temel Parametreler:
 ```
 1. Taksit Sayısı = Vade ✅
 2. Taksit Toplamı = Toplam Ödenecek ✅
-3. Faiz = Toplam - Anapara ✅
-4. Faiz ≥ 0 ✅
+3. vade farkı = Toplam - Anapara ✅
+4. vade farkı ≥ 0 ✅
 5. Vade > 0 ✅
 6. Para Birimi = 2 Ondalak ✅
 ```
@@ -168,7 +168,7 @@ Girdi:
 Çıktı:
 ├─ Aylık Taksit: 1.204,87 TL ✅
 ├─ Toplam Ödeme: 14.458,48 TL ✅
-└─ Toplam Faiz: 2.458,48 TL ✅
+└─ Toplam vade farkı: 2.458,48 TL ✅
 ```
 
 ### Senaryo 2: Uzun Vadeli Kredi
@@ -181,10 +181,10 @@ Girdi:
 Çıktı:
 ├─ Aylık Taksit: ~1.144,69 TL ✅
 ├─ Toplam Ödeme: ~68.681,39 TL ✅
-└─ Toplam Faiz: ~18.681,39 TL ✅
+└─ Toplam vade farkı: ~18.681,39 TL ✅
 ```
 
-### Senaryo 3: Sıfır Faiz
+### Senaryo 3: Sıfır vade farkı
 ```
 Girdi:
 ├─ Ana Para: 12.000 TL
@@ -194,7 +194,7 @@ Girdi:
 Çıktı:
 ├─ Aylık Taksit: 1.000,00 TL ✅
 ├─ Toplam Ödeme: 12.000,00 TL ✅
-└─ Toplam Faiz: 0,00 TL ✅
+└─ Toplam vade farkı: 0,00 TL ✅
 ```
 
 ### Senaryo 4: Balon Ödeme
@@ -224,7 +224,7 @@ Girdi:
 ### Bilgi Hiyerarşisi
 1. **Temel Bilgiler**: Tarihler, Durum, Vade
 2. **Finansal Metriks**: Anapara, Toplam, Oran
-3. **Detaylı İstatistikler**: Faiz, Gecikme, İlerleme
+3. **Detaylı İstatistikler**: vade farkı, Gecikme, İlerleme
 4. **Sistem Uyarıları**: Hesaplama hataları, Risk uyarıları
 
 ### Responsive Tasarım
@@ -288,7 +288,7 @@ formatNumber(1000000)        → "1.000.000"
 // Aylık Taksit (Amortizasyon)
 calculateMonthlyInstallment(principal, monthlyRate, term)
 
-// Toplam Faiz
+// Toplam vade farkı
 calculateTotalInterest(totalPayable, principal)
 
 // Yıllık Oran
@@ -360,7 +360,7 @@ Uygulama üretim ortamı için hazırdır:
 Bu güncellemede üç ana alan ele alındı:
 
 1. **KKDF/BSMV Entegrasyonu (Backend + Frontend)**
-2. **Gerçekçi Faiz Oranı Sistemi**
+2. **Gerçekçi vade farkı Oranı Sistemi**
 3. **UI Ekran Geliştirmeleri (LoanDetail, CustomerDetail)**
 
 ---
@@ -381,7 +381,7 @@ Yeni: grossRate = rateAmount × 1.20
 - `LoanEvaluationService.cs` — değerlendirme tahmini + amortisman tablosu brüt oranla
 - `LoanService.cs` — toplam ödenecek hesabı brüt oranla
 
-**Yeni DTO:** `InstallmentPlanRow` — her taksit satırı için Anapara / Net Faiz / KKDF / BSMV / Toplam / Kalan Bakiye alanlarını taşır.
+**Yeni DTO:** `InstallmentPlanRow` — her taksit satırı için Anapara / Net vade farkı / KKDF / BSMV / Toplam / Kalan Bakiye alanlarını taşır.
 
 **LoanEvaluationResponse'a eklenen alanlar:**
 | Alan | Açıklama |
@@ -394,7 +394,7 @@ Yeni: grossRate = rateAmount × 1.20
 
 ---
 
-### 2. Gerçekçi Faiz Oranı Referans Değerleri
+### 2. Gerçekçi vade farkı Oranı Referans Değerleri
 
 `InterestCalculationEngine`'deki baz aylık oranlar Türkiye bankacılık standartlarına uygun değerlere güncellendi:
 
@@ -419,7 +419,7 @@ VadeFactörü ve MeslekBonusu da güncellendi (bkz. `DECISIONS.md` K-06 ve K-22)
 **Taksit planı tablosu (genişletildi):**
 ```
 Önceki kolonlar: # | Tutar | Son Ödeme | Ödeme Tarihi | Durum
-Yeni kolonlar:   # | Anapara | Net Faiz | KKDF | BSMV | Taksit | Son Ödeme | Ödeme Tarihi | Durum
+Yeni kolonlar:   # | Anapara | Net vade farkı | KKDF | BSMV | Taksit | Son Ödeme | Ödeme Tarihi | Durum
 ```
 Frontend'de `buildAmortizationTable()` fonksiyonu ile hesaplanan döküm, `installmentNumber` üzerinden her satıra eşleştiriliyor. Tablo `overflow-x-auto` ile yatay kaydırmalı.
 
@@ -441,8 +441,8 @@ Frontend'de `buildAmortizationTable()` fonksiyonu ile hesaplanan döküm, `insta
 - KKDF+BSMV dahil brüt oranla anlık aylık taksit ve toplam ödenecek hesaplanıp gösterilir.
 
 **Değerlendirme paneli (genişletildi):**
-- "Faiz & Maliyet" bölümü: Net Oran / Brüt Oran / YMO / Borç-Gelir (4 hücre).
-- "Ödeme Planını Göster/Gizle" accordion: 7 kolonlu (# / Anapara / Faiz / KKDF / BSMV / Toplam / Kalan) amortisman tablosu.
+- "vade farkı & Maliyet" bölümü: Net Oran / Brüt Oran / YMO / Borç-Gelir (4 hücre).
+- "Ödeme Planını Göster/Gizle" accordion: 7 kolonlu (# / Anapara / vade farkı / KKDF / BSMV / Toplam / Kalan) amortisman tablosu.
 
 ---
 

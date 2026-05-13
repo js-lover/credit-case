@@ -38,7 +38,7 @@ public class LoansController : ControllerBase
 
     /// <summary>
     /// Yeni kredi oluşturur. Kredi skoru onaylandıktan sonra taksit planı otomatik üretilir.
-    /// Taksit tutarı düz faiz (flat-rate) yöntemiyle hesaplanır.
+    /// Taksit tutarı düz vade farkı (flat-rate) yöntemiyle hesaplanır.
     /// </summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateLoanRequest request)
